@@ -5,7 +5,7 @@
 <h1 align="center">Quelo Doctor</h1>
 
 <p align="center">
-  <strong>ISO live di soccorso per PC</strong> — menu testuale, diagnostica dischi, recupero dati, antivirus offline.<br>
+  <strong>ISO live di soccorso per PC Leggera</strong> — menu testuale, diagnostica dischi, recupero dati, antivirus anche offline.<br>
   <strong>PC rescue live ISO</strong> — text menu, disk diagnostics, data recovery, offline malware scan.
 </p>
 
