@@ -5,3 +5,8 @@ ISO/*.ISO
 # Build locale
 .build/
 *.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

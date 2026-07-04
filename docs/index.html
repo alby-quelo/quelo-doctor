@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quelo Doctor — ISO live di soccorso per PC</title>
+  <meta name="description" content="Quelo Doctor: ISO live Debian sid per diagnostica dischi, recupero dati, antivirus offline. Menu testuale bilingue IT/EN.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <img class="mascot" src="images/quelo-mascot.png" alt="Mascotte Quelo" width="120" height="120">
+  <h1>Quelo Doctor</h1>
+  <p class="tagline">
+    <strong>ISO live di soccorso per PC</strong> — menu testuale, diagnostica dischi, recupero dati, antivirus offline.<br>
+    <strong>PC rescue live ISO</strong> — text menu, disk diagnostics, data recovery, offline malware scan.
+  </p>
+  <div class="badges">
+    <span class="badge release">release 0.75-alpha</span>
+    <span class="badge good">verificata / verified 0.75</span>
+    <span class="badge arch">amd64</span>
+    <span class="badge debian">Debian sid</span>
+  </div>
+</header>
+
+<nav class="top" aria-label="Navigazione principale">
+  <a href="#download">Download</a>
+  <a href="#italiano">Italiano</a>
+  <a href="#english">English</a>
+  <a href="#build">Build</a>
+  <a href="#issues">Segnalazioni</a>
+  <a href="https://github.com/alby-quelo/quelo-doctor">Repository</a>
+</nav>
+
+<main>
+
+  <figure class="screenshot">
+    <img src="images/principale.png" alt="Menu principale Quelo Doctor 0.75" width="800" height="600">
+    <figcaption>Menu principale — versione 0.75 alpha / Main menu — version 0.75 alpha</figcaption>
+  </figure>
+
+  <section id="download">
+    <h2>Download</h2>
+    <table>
+      <thead>
+        <tr><th>File</th><th>Descrizione / Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="https://github.com/alby-quelo/quelo-doctor/releases/latest">quelo-doctor-0.75-alpha.iso</a></td>
+          <td>Ultima ISO verificata (~996 MB) / Latest verified ISO</td>
+        </tr>
+        <tr>
+          <td><a href="https://github.com/alby-quelo/quelo-doctor/tree/main/SORGENTI">SORGENTI/</a></td>
+          <td>Sorgenti per build e personalizzazione / Build sources</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">
+      L'ISO non è nel repository git (limite 100 MB di GitHub). Scaricala dalle <strong>Releases</strong>.<br>
+      The ISO is not in the git tree (GitHub 100 MB limit). Download from <strong>Releases</strong>.
+    </p>
+    <p>
+      <strong>Avvio / Boot:</strong> flash su USB (Ventoy, Rufus, balenaEtcher, <code>dd</code>) → avvio UEFI o Legacy BIOS.
+    </p>
+    <a class="btn primary" href="https://github.com/alby-quelo/quelo-doctor/releases/latest">Scarica ISO / Download ISO</a>
+  </section>
+
+  <section id="italiano">
+    <h2>Italiano</h2>
+    <div class="lang-block">
+      <h3>Cos'è Quelo Doctor</h3>
+      <p>
+        <strong>Quelo Doctor</strong> è una distribuzione <strong>live</strong> pensata per tecnici e utenti avanzati che devono
+        <strong>salvare un PC in emergenza</strong>: dischi che non bootano, file cancellati, sospetta infezione, password dimenticate,
+        avvio Windows/Linux rotto.
+      </p>
+      <p>
+        Niente desktop, niente browser: solo un <strong>menu testuale</strong> rapido su TTY, ispirato al personaggio
+        <strong>Quelo</strong> di Corrado Guzzanti (crediti in menu <strong>C</strong>).
+      </p>
+
+      <h3>Perché queste scelte</h3>
+      <table>
+        <thead><tr><th>Scelta</th><th>Motivo</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Menu testuale, no GUI</strong></td><td>Funziona su quasi tutto l'hardware, anche con GPU/driver problematici; meno RAM, avvio più prevedibile</td></tr>
+          <tr><td><strong>Debian sid + live-build</strong></td><td>Base solida, pacchetti aggiornati, toolchain standard per ISO live</td></tr>
+          <tr><td><strong>Un tool per voce di menu</strong></td><td>Flusso guidato: non devi cercare quale programma lanciare (TestDisk, mc, ClamAV…)</td></tr>
+          <tr><td><strong>Automount USB in /media</strong></td><td>Chiavette e dischi USB compaiono subito, pronti per salvare report e log</td></tr>
+          <tr><td><strong>Documentazione stile man</strong></td><td>Crediti, licenze e manuale (C/M) usano <code>man-db</code> + <code>groff</code> + <code>less</code>: scroll affidabile su console</td></tr>
+          <tr><td><strong>Tasto Q uniforme</strong></td><td>Indietro/uscita uguale ovunque (sottomenu e testi), come nei pager standard Linux</td></tr>
+          <tr><td><strong>Solo amd64</strong></td><td>Copre i PC reali in campo; build più snella</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Menu principale</h3>
+      <p><strong>PRINCIPALE</strong></p>
+      <ul class="menu-list">
+        <li><strong>1.</strong> Shell root</li>
+        <li><strong>2.</strong> Controllo dischi (SMART, partizioni, mount, fsck)</li>
+        <li><strong>3.</strong> Gestione file (Midnight Commander)</li>
+        <li><strong>4.</strong> Recupera dischi (TestDisk)</li>
+        <li><strong>5.</strong> Recupera file (ext/NTFS, wizard)</li>
+        <li><strong>6.</strong> Ripara avvio S.O. (GRUB, MBR, Windows)</li>
+        <li><strong>7.</strong> Controlla infezioni (ClamAV, YARA, chkrootkit)</li>
+        <li><strong>8.</strong> Sblocca password e criptazioni <em>(experimental)</em></li>
+      </ul>
+      <p>
+        <strong>AMBIENTE</strong> — <code>L</code> lingua/tastiera · <code>N</code> rete<br>
+        <strong>INFO</strong> — <code>C</code> crediti e licenze · <code>M</code> manuale · <code>S</code> salva rapporto/log su USB<br>
+        <strong>POWER</strong> — <code>Alt+Z</code> spegni · <code>Alt+R</code> riavvia
+      </p>
+
+      <h3>Software principale incluso</h3>
+      <p>
+        TestDisk/PhotoRec, Midnight Commander, ClamAV, YARA, GRUB, ntfs-3g, NetworkManager, smartmontools,
+        cryptsetup/dislocker, e componenti Debian documentati in menu <strong>C</strong> / Licenze.
+      </p>
+
+      <h3>Come funziona (in breve)</h3>
+      <ol>
+        <li>Boot da USB → logo e menu verde/ambra</li>
+        <li>Un tasto per scegliere la voce</li>
+        <li><strong>Q</strong> per tornare indietro</li>
+        <li>I report (menu <strong>S</strong> e log scan menu <strong>7</strong>) si salvano su supporti esterni con permessi leggibili da desktop (<code>644</code>, utente <code>1000</code>)</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="english">
+    <h2>English</h2>
+    <div class="lang-block">
+      <h3>What is Quelo Doctor</h3>
+      <p>
+        <strong>Quelo Doctor</strong> is a <strong>live</strong> rescue ISO for technicians and power users: broken boot, deleted files,
+        malware checks, password recovery, Windows/Linux boot repair.
+      </p>
+      <p>
+        No desktop, no web browser: a fast <strong>text menu</strong> on the Linux console, named after the
+        <strong>Quelo</strong> character by Corrado Guzzanti (see menu <strong>C</strong> for credits).
+      </p>
+
+      <h3>Why we built it this way</h3>
+      <table>
+        <thead><tr><th>Choice</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Text menu, no GUI</strong></td><td>Works on difficult hardware; lower RAM use; predictable boot</td></tr>
+          <tr><td><strong>Debian sid + live-build</strong></td><td>Solid base, current packages, standard live ISO tooling</td></tr>
+          <tr><td><strong>One guided tool per menu item</strong></td><td>No guessing which app to run (TestDisk, mc, ClamAV…)</td></tr>
+          <tr><td><strong>USB automount under /media</strong></td><td>External drives ready for reports and logs</td></tr>
+          <tr><td><strong>man-style docs</strong></td><td>Credits, licenses, manual (C/M) via <code>man-db</code> + <code>groff</code> + <code>less</code></td></tr>
+          <tr><td><strong>Uniform Q key</strong></td><td>Back/exit everywhere, consistent with standard Linux pagers</td></tr>
+          <tr><td><strong>amd64 only</strong></td><td>Matches real-world hardware; leaner build</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Main menu</h3>
+      <p>Same layout as the Italian section. Menu <strong>L</strong> switches locale (Italian/English).</p>
+    </div>
+  </section>
+
+  <section id="build">
+    <h2>Build dalla sorgente / Rebuild your own</h2>
+    <p>Requisiti / Requirements: Debian o Ubuntu, <code>sudo</code>, <code>live-build</code>, <code>debootstrap</code>, ~15 GB spazio.</p>
+    <pre><code>git clone https://github.com/alby-quelo/quelo-doctor.git
+cd quelo-doctor/SORGENTI
+sudo ./build.sh</code></pre>
+    <p>
+      L'ISO finisce in <code>../ISO/quelo-doctor-X.XX-alpha.iso</code>. Versione corrente in <code>SORGENTI/VERSION</code>.
+    </p>
+    <p>Personalizza:</p>
+    <ul>
+      <li><code>SORGENTI/overlay/</code> — script, config, testi</li>
+      <li><code>SORGENTI/packages/extra.list.chroot</code> — pacchetti aggiuntivi</li>
+      <li><code>SORGENTI/hooks/</code> — hook live-build</li>
+    </ul>
+
+    <h3>Struttura repository</h3>
+    <pre class="tree">quelo-doctor/
+├── README.md           ← documentazione (anche su GitHub)
+├── docs/               ← questa pagina (GitHub Pages)
+├── images/             ← screenshot e mascotte
+├── SORGENTI/           ← sorgenti build
+└── ISO/                ← solo locale — su GitHub usa Releases</pre>
+    <a class="btn" href="https://github.com/alby-quelo/quelo-doctor">Apri repository / Open repository</a>
+  </section>
+
+  <section id="issues">
+    <h2>Segnalare problemi / Report issues</h2>
+    <p>Hai trovato un bug? Apri una issue con:</p>
+    <ul>
+      <li>versione ISO (es. 0.75)</li>
+      <li>passi per riprodurre</li>
+      <li>hardware (UEFI/BIOS, dischi)</li>
+      <li>comportamento atteso vs osservato</li>
+    </ul>
+    <p>Found a bug? Open an issue with the same details.</p>
+    <a class="btn primary" href="https://github.com/alby-quelo/quelo-doctor/issues/new/choose">Apri issue / Open issue</a>
+  </section>
+
+  <section id="licenses">
+    <h2>Licenze / Licenses</h2>
+    <ul>
+      <li><strong>Quelo Doctor</strong> (menu, script, overlay): <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a></li>
+      <li><strong>Software di terze parti</strong>: GPL, Apache, ecc. — elenco completo in ISO menu <strong>C</strong> → Licenze</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <p>Quelo Doctor — alpha · Ultima verificata / Last verified: <strong>0.75</strong></p>
+  <p>
+    <a href="https://github.com/alby-quelo/quelo-doctor">GitHub</a> ·
+    <a href="https://github.com/alby-quelo/quelo-doctor/releases/latest">Releases</a> ·
+    <a href="https://github.com/alby-quelo/quelo-doctor/issues">Issues</a>
+  </p>
+</footer>
+
+</body>
+</html>

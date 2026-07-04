@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="https://alby-quelo.github.io/quelo-doctor/">Sito web / Website</a> ·
   <a href="#download">Download</a> ·
   <a href="#italiano">Italiano</a> ·
   <a href="#english">English</a> ·
@@ -155,6 +156,7 @@ Edit `SORGENTI/overlay/` for scripts and config, `packages/extra.list.chroot` fo
 ```
 quelo-doctor/
 ├── README.md           ← questa pagina
+├── docs/               ← sito GitHub Pages
 ├── images/             ← screenshot e mascotte
 ├── SORGENTI/           ← sorgenti build (overlay, hooks, build.sh)
 └── ISO/                ← (solo locale) — su GitHub usa Releases
