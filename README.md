@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>ISO live di soccorso per PC Leggera</strong> — menu testuale, diagnostica dischi, recupero dati, antivirus anche offline.<br>
-  <strong>PC rescue live ISO</strong> — text menu, disk diagnostics, data recovery, offline malware scan.
+  <strong>Lightweight PC rescue live ISO</strong> — text menu, disk diagnostics, data recovery, offline antivirus too.
 </p>
 
 <p align="center">
