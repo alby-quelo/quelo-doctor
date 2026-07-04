@@ -138,10 +138,42 @@ h2 {
   margin-top: 0;
 }
 
+header.compact {
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+header .back {
+  margin: 0 0 0.75rem;
+  text-align: left;
+  max-width: 52rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+header .back a {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+header .back a:hover {
+  color: var(--green);
+}
+
+.rec {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--amber);
+  vertical-align: middle;
+}
+
+.note.warn {
+  border-left-color: #ff6644;
+}
+
 h3 {
   color: var(--green);
-  font-size: 1.2rem;
-  margin-top: 1.75rem;
+  font-size: 1.1rem;
+  margin-top: 1.25rem;
 }
 
 .screenshot {

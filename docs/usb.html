@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guida USB — Quelo Doctor</title>
+  <meta name="description" content="Come preparare una chiavetta USB con Quelo Doctor: Ventoy, dd, Rufus, balenaEtcher, GNOME Disks, USBImager e altri.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="compact">
+  <p class="back"><a href="index.html">← Quelo Doctor</a></p>
+  <h1>Guida preparazione USB</h1>
+  <p class="tagline">
+    Come scrivere l'ISO su chiavetta — tutti i metodi / How to write the ISO to a USB stick — all methods
+  </p>
+</header>
+
+<nav class="top" aria-label="Indice guida">
+  <a href="#prima">Prima di iniziare</a>
+  <a href="#ventoy">Ventoy</a>
+  <a href="#dd">dd</a>
+  <a href="#etcher">balenaEtcher</a>
+  <a href="#rufus">Rufus</a>
+  <a href="#disks">GNOME Disks</a>
+  <a href="#usbimager">USBImager</a>
+  <a href="#win32">Win32 Disk Imager</a>
+  <a href="#altri">Altri</a>
+  <a href="#boot">Avvio PC</a>
+</nav>
+
+<main>
+
+  <section id="prima">
+    <h2>Prima di iniziare / Before you start</h2>
+    <ol>
+      <li>Scarica l'ISO dalle <a href="https://github.com/alby-quelo/quelo-doctor/releases/latest">Releases</a> (es. <code>quelo-doctor-0.75-alpha.iso</code>, ~1 GB).</li>
+      <li>Usa una chiavetta da <strong>almeno 2 GB</strong> (consigliato <strong>4 GB+</strong>). <strong>Tutti i dati sulla USB verranno cancellati</strong> (tranne con Ventoy se aggiungi solo un file ISO).</li>
+      <li>Identifica il <strong>dispositivo giusto</strong> — confondere disco interno e USB è il modo più comune per perdere dati.</li>
+      <li>Dopo la scrittura, riavvia il PC e avvia da USB (vedi <a href="#boot">Avvio PC</a>).</li>
+    </ol>
+
+    <h3>Come trovare il nome del dispositivo USB</h3>
+    <table>
+      <thead><tr><th>Sistema</th><th>Comando / strumento</th></tr></thead>
+      <tbody>
+        <tr><td>Linux</td><td><code>lsblk -o NAME,SIZE,MODEL,TRAN</code> — la USB è di solito <code>/dev/sdX</code> (es. <code>sdb</code>), <strong>non</strong> <code>sdb1</code></td></tr>
+        <tr><td>macOS</td><td><code>diskutil list</code> — dispositivo <code>/dev/diskN</code></td></tr>
+        <tr><td>Windows</td><td>Gestione disco o l'interfaccia del programma (Rufus, Etcher…) — lettera o disco fisico</td></tr>
+      </tbody>
+    </table>
+    <p class="note warn">
+      <strong>Attenzione:</strong> con <code>dd</code> e strumenti “raw” scrivi sull'intero disco (<code>/dev/sdb</code>), non sulla partizione (<code>/dev/sdb1</code>).
+    </p>
+  </section>
+
+  <section id="ventoy">
+    <h2>1. Ventoy <span class="rec">consigliato per tecnici</span></h2>
+    <p>
+      <a href="https://www.ventoy.net/">Ventoy</a> formatta la USB una sola volta; poi <strong>copi le ISO come file</strong>
+      (trascinamento o copia normale). Puoi tenere più ISO sulla stessa chiavetta e scegliere al boot.
+    </p>
+    <p><strong>Pro:</strong> niente riscrittura completa a ogni aggiornamento · più ISO sulla stessa USB · UEFI + BIOS<br>
+    <strong>Contro:</strong> primo setup leggermente più lungo</p>
+    <ol>
+      <li>Scarica Ventoy da <a href="https://www.ventoy.net/en/download.html">ventoy.net</a> (Windows, Linux o macOS).</li>
+      <li>Installa Ventoy sulla chiavetta con <strong>Ventoy2Disk</strong> (GUI) o <code>Ventoy2Disk.sh -i /dev/sdX</code> (Linux).</li>
+      <li>Al termine, la USB avrà una partizione dati (es. etichetta <code>Ventoy</code>).</li>
+      <li>Copia <code>quelo-doctor-….iso</code> in quella partizione — come un file qualsiasi.</li>
+      <li>Boot da USB → menu Ventoy → seleziona <strong>quelo-doctor-….iso</strong> → Invio.</li>
+    </ol>
+    <p class="note">Per aggiornare Quelo Doctor: sostituisci il file ISO sulla USB. Non serve rifare Ventoy.</p>
+  </section>
+
+  <section id="dd">
+    <h2>2. <code>dd</code> (Linux / macOS)</h2>
+    <p>Scrittura bit-per-bit dell'ISO sull'intera chiavetta. Metodo classico, veloce, senza GUI.</p>
+    <h3>Linux</h3>
+    <pre><code># 1) Trova la USB (es. sdb) — NON il disco del sistema
+lsblk -o NAME,SIZE,MODEL,TRAN
+
+# 2) Smonta eventuali partizioni
+sudo umount /dev/sdb* 2>/dev/null
+
+# 3) Scrivi l'ISO (sostituisci sdb e il nome file)
+sudo dd if=quelo-doctor-0.75-alpha.iso of=/dev/sdb bs=4M status=progress conv=fsync
+
+# 4) Sincronizza
+sync</code></pre>
+    <h3>macOS</h3>
+    <pre><code>diskutil list
+diskutil unmountDisk /dev/diskN
+sudo dd if=quelo-doctor-0.75-alpha.iso of=/dev/rdiskN bs=4m status=progress
+sync</code></pre>
+    <p class="note">Su macOS usa <code>rdiskN</code> (raw) per velocità maggiore. <code>diskN</code> è il numero del dispositivo USB.</p>
+  </section>
+
+  <section id="etcher">
+    <h2>3. balenaEtcher</h2>
+    <p>
+      <a href="https://etcher.balena.io/">balenaEtcher</a> — GUI semplice per Windows, macOS e Linux.
+      Adatto a chi preferisce non usare la riga di comando.
+    </p>
+    <ol>
+      <li>Installa o avvia balenaEtcher.</li>
+      <li><strong>Flash from file</strong> → seleziona <code>quelo-doctor-….iso</code>.</li>
+      <li><strong>Select target</strong> → scegli la chiavetta USB (controlla capacità ed etichetta).</li>
+      <li><strong>Flash!</strong> — attendi fine e verifica eventuale.</li>
+    </ol>
+    <p>Etcher scrive in modalità raw come <code>dd</code>: la USB conterrà solo questa ISO fino a una nuova scrittura.</p>
+  </section>
+
+  <section id="rufus">
+    <h2>4. Rufus (Windows)</h2>
+    <p>
+      <a href="https://rufus.ie/">Rufus</a> è molto usato su Windows per ISO avviabili Linux.
+    </p>
+    <ol>
+      <li>Scarica Rufus (portable o installer).</li>
+      <li><strong>Dispositivo</strong> → seleziona la USB.</li>
+      <li><strong>Selezione boot</strong> → <strong>Disco o immagine ISO</strong> → Scegli → file <code>quelo-doctor-….iso</code>.</li>
+      <li><strong>Schema partizione</strong>: di di solito <strong>GPT</strong> + <strong>UEFI</strong> su PC moderni; <strong>MBR</strong> + <strong>BIOS</strong> su hardware vecchio. In dubbio: GPT/UEFI (il PC legacy spesso ha comunque CSM).</li>
+      <li><strong>Avvia</strong> → conferma cancellazione dati sulla USB.</li>
+    </ol>
+    <p class="note">Per ISO Linux live, lascia Rufus in modalità <strong>ISO</strong> (default). Non serve “DD image” salvo problemi di boot.</p>
+  </section>
+
+  <section id="disks">
+    <h2>5. GNOME Disks / KDE ISO Image Writer (Linux)</h2>
+    <h3>GNOME Dischi (Disks)</h3>
+    <p>Presente su Ubuntu, Fedora Workstation e molte distro con GNOME.</p>
+    <ol>
+      <li>Apri <strong>Dischi</strong> / <strong>Disks</strong>.</li>
+      <li>Seleziona la chiavetta USB nella colonna sinistra.</li>
+      <li>Menu <strong>⋮</strong> → <strong>Restore Disk Image…</strong> / <strong>Ripristina immagine disco…</strong>.</li>
+      <li>Scegli l'ISO Quelo Doctor → conferma.</li>
+    </ol>
+    <h3>KDE ISO Image Writer</h3>
+    <p>Su KDE Plasma: cerca <strong>ISO Image Writer</strong> nel menu applicazioni, seleziona ISO e destinazione USB.</p>
+  </section>
+
+  <section id="usbimager">
+    <h2>6. USBImager</h2>
+    <p>
+      <a href="https://gitlab.com/bztsrc/usbimager">USBImager</a> — programma leggero, open source, per Windows, Linux e macOS.
+      Interfaccia minimale simile a Etcher.
+    </p>
+    <ol>
+      <li>Avvia USBImager.</li>
+      <li><strong>Select image</strong> → ISO Quelo Doctor.</li>
+      <li><strong>Select disk</strong> → USB corretta.</li>
+      <li><strong>Write</strong> → attendi completamento.</li>
+    </ol>
+  </section>
+
+  <section id="win32">
+    <h2>7. Win32 Disk Imager (Windows)</h2>
+    <p>
+      <a href="https://sourceforge.net/projects/win32diskimager/">Win32 Disk Imager</a> — storico su Windows, ancora usato per scritture raw.
+    </p>
+    <ol>
+      <li>Avvia come amministratore se richiesto.</li>
+      <li><strong>Image File</strong> → icona cartella → seleziona <code>.iso</code>.</li>
+      <li><strong>Device</strong> → lettera della USB (verifica in Esplora file).</li>
+      <li><strong>Write</strong> → conferma.</li>
+    </ol>
+    <p class="note warn">Controlla due volte la lettera unità: Win32 Disk Imager non ha le stesse protezioni di Etcher.</p>
+  </section>
+
+  <section id="altri">
+    <h2>8. Altri metodi validi</h2>
+    <table>
+      <thead><tr><th>Tool</th><th>Piattaforma</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><a href="https://fedoraproject.org/workstation/download">Fedora Media Writer</a></td>
+          <td>Windows, macOS, Linux</td>
+          <td>Pensato per Fedora ma accetta anche altre ISO; interfaccia guidata</td>
+        </tr>
+        <tr>
+          <td><a href="https://wiki.archlinux.org/title/USB_flash_installation_medium">Arch <code>dd</code> / <code>cp</code></a></td>
+          <td>Linux</td>
+          <td>Stesso principio di <code>dd</code>; su alcuni sistemi <code>cp iso /dev/sdX</code> funziona ma <code>dd</code> è più portabile</td>
+        </tr>
+        <tr>
+          <td><code>pv</code> + <code>dd</code></td>
+          <td>Linux</td>
+          <td><code>pv quelo-doctor.iso | sudo dd of=/dev/sdX bs=4M</code> — barra di avanzamento</td>
+        </tr>
+        <tr>
+          <td><a href="https://unetbootin.github.io/">UNetbootin</a></td>
+          <td>Windows, Linux</td>
+          <td>Meno usato oggi; verifica che l'ISO sia supportata come “disco live”</td>
+        </tr>
+        <tr>
+          <td>VM + pass-through USB</td>
+          <td>Qualsiasi</td>
+          <td>Per test in QEMU/VirtualBox senza scrivere USB fisica: monta l'ISO come CD avviabile</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      In generale: se il tool scrive l'ISO come <strong>immagine disco avviabile</strong> (non solo copia file dentro una partizione FAT),
+      va bene. In dubbio, usa <strong>Ventoy</strong>, <strong>dd</strong> o <strong>balenaEtcher</strong>.
+    </p>
+  </section>
+
+  <section id="boot">
+    <h2>Avvio del PC / Booting the PC</h2>
+    <ol>
+      <li>Inserisci la USB nel PC da riparare.</li>
+      <li>Accendi e apri il <strong>menu boot</strong> o il setup firmware:
+        <ul>
+          <li>Tasti comuni: <strong>F12</strong>, <strong>F11</strong>, <strong>F9</strong>, <strong>F8</strong>, <strong>Esc</strong>, <strong>F2</strong> (setup)</li>
+          <li>Il messaggio all'avvio indica il tasto (es. “Press F12 for boot menu”)</li>
+        </ul>
+      </li>
+      <li>Scegli la USB (può comparire come nome marca, “UEFI: …” o “USB HDD”).</li>
+      <li>Se non parte: in UEFI disabilita temporaneamente <strong>Secure Boot</strong> o prova la voce <strong>Legacy</strong> / <strong>CSM</strong>.</li>
+      <li>Dovresti vedere il logo Quelo Doctor e il menu testuale.</li>
+    </ol>
+    <p>
+      Requisiti hardware: vedi <a href="index.html#usb-requisiti">USB e requisiti minimi</a> sulla pagina principale.
+    </p>
+  </section>
+
+  <section id="problemi">
+    <h2>Problemi? / Troubleshooting</h2>
+    <ul>
+      <li><strong>USB non compare nel menu boot</strong> — prova un'altra porta (USB 2.0 posteriore), disabilita Secure Boot, o riscrivi con un altro metodo.</li>
+      <li><strong>Schermo nero dopo boot</strong> — attendi 30–60 s; prova modalità Legacy se UEFI fallisce.</li>
+      <li><strong>“Operating system not found”</strong> — ISO scritta male o dispositivo sbagliato; ripeti con <code>dd</code> o Etcher.</li>
+      <li><strong>Ventoy non elenca l'ISO</strong> — controlla che il file sia nella partizione dati Ventoy e che l'estensione sia <code>.iso</code>.</li>
+    </ul>
+    <a class="btn primary" href="https://github.com/alby-quelo/quelo-doctor/issues/new/choose">Segnala un problema / Report issue</a>
+  </section>
+
+</main>
+
+<footer>
+  <p><a href="index.html">← Torna a Quelo Doctor</a></p>
+  <p>
+    <a href="https://github.com/alby-quelo/quelo-doctor/releases/latest">Download ISO</a> ·
+    <a href="https://github.com/alby-quelo/quelo-doctor">Repository</a>
+  </p>
+</footer>
+
+</body>
+</html>

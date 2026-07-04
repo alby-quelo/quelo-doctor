@@ -42,6 +42,8 @@
 | **Rufus / balenaEtcher** | GUI su Windows, macOS o Linux — selezioni l'ISO e il dispositivo USB |
 | **Altri tool** | Qualsiasi programma che scrive correttamente un'ISO avviabile (UEFI e/o BIOS) |
 
+📖 **[Guida completa preparazione USB](https://alby-quelo.github.io/quelo-doctor/usb.html)** — passo passo per Ventoy, `dd`, Rufus, balenaEtcher, GNOME Disks, USBImager, Win32 Disk Imager e altri.
+
 **Avvio:** inserisci la USB, accendi il PC, entra nel menu boot (F12, F8, Esc… a seconda del modello) e scegli la chiavetta. Funziona con **UEFI** e **Legacy BIOS**.
 
 ### Requisiti minimi del PC / Minimum PC specs
