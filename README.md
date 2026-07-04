@@ -58,7 +58,7 @@ Niente desktop grafico: solo console testuale. In uso normale (menu principale) 
 | **Processore** | Qualsiasi CPU **64 bit** amd64 (anche single-core) | Dual-core o superiore per operazioni lunghe (ClamAV, TestDisk) |
 | **Chiavetta USB** | **2 GB** (ISO ~1 GB) | **4 GB+** — più comoda per aggiornamenti e copie di backup |
 | **Schermo** | Console testuale / framebuffer — **nessuna GPU dedicata** richiesta | — |
-| **Rete** | Opzionale (Wi‑Fi/Ethernet per menu **N**) | Utile per aggiornare firme antivirus prima dello scan |
+| **Rete** | Opzionale (menu **N**); firmware non-free già inclusi per LAN, Wi‑Fi e mobile broadband | Utile per aggiornare firme antivirus prima dello scan |
 | **Boot** | UEFI **oppure** Legacy BIOS | — |
 
 > **Nota:** menu **7** (ClamAV + YARA) e operazioni su volumi molto grandi possono richiedere più RAM e tempo CPU; su PC con 512 MB resta usabile per diagnostica dischi, shell, mc e ripristino avvio.
@@ -104,6 +104,7 @@ Niente desktop, niente browser: solo un **menu testuale** rapido su TTY, ispirat
 | **Automount USB in /media** | Chiavette e dischi USB compaiono subito, pronti per salvare report e log |
 | **Documentazione stile `man`** | Crediti, licenze e manuale (C/M) usano `man-db` + `groff` + `less`: scroll affidabile su console |
 | **Tasto Q uniforme** | Indietro/uscita uguale ovunque (sottomenu e testi), come nei pager standard Linux |
+| **Firmware non-free** | Inclusi (sezione `non-free-firmware` di Debian) per coprire il maggior numero di schede di rete: **Ethernet (LAN)**, **Wi‑Fi** e **mobile broadband** (modem USB/4G via ModemManager) |
 | **Solo amd64** | Copre i PC reali in campo; build più snella |
 
 ### Menu principale
@@ -126,7 +127,7 @@ Niente desktop, niente browser: solo un **menu testuale** rapido su TTY, ispirat
 
 ### Software principale incluso
 
-TestDisk/PhotoRec, Midnight Commander, ClamAV, YARA, GRUB, ntfs-3g, NetworkManager, smartmontools, cryptsetup/dislocker, e componenti Debian documentati in menu **C** / **Licenze**.
+TestDisk/PhotoRec, Midnight Commander, ClamAV, YARA, GRUB, ntfs-3g, NetworkManager, ModemManager, smartmontools, cryptsetup/dislocker, **firmware non-free** (Intel/Realtek/Broadcom/Mediatek e schede Ethernet enterprise per LAN, Wi‑Fi e mobile broadband), e componenti Debian documentati in menu **C** / **Licenze**.
 
 ### Come funziona (in breve)
 
@@ -170,6 +171,7 @@ No desktop, no web browser: a fast **text menu** on the Linux console, named aft
 | **USB automount under /media** | External drives ready for reports and logs |
 | **`man`-style docs** | Credits, licenses, manual (C/M) via `man-db` + `groff` + `less` |
 | **Uniform Q key** | Back/exit everywhere, consistent with standard Linux pagers |
+| **Non-free firmware** | Included (Debian `non-free-firmware`) to support as many network adapters as possible: **Ethernet (LAN)**, **Wi‑Fi**, and **mobile broadband** (USB modems/4G via ModemManager) |
 | **amd64 only** | Matches real-world hardware; leaner build |
 
 ### Main menu

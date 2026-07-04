@@ -91,7 +91,7 @@
         <tr><td><strong>Processore</strong></td><td>CPU 64 bit amd64 (anche single-core)</td><td>Dual-core+ per ClamAV, TestDisk, operazioni lunghe</td></tr>
         <tr><td><strong>Chiavetta USB</strong></td><td>2 GB (ISO ~1 GB)</td><td>4 GB+</td></tr>
         <tr><td><strong>Schermo</strong></td><td>Console testuale / framebuffer, no GPU dedicata</td><td>—</td></tr>
-        <tr><td><strong>Rete</strong></td><td>Opzionale (menu N)</td><td>Utile per aggiornare firme AV prima dello scan</td></tr>
+        <tr><td><strong>Rete</strong></td><td>Opzionale (menu N); firmware non-free inclusi per LAN, Wi‑Fi e mobile broadband</td><td>Utile per aggiornare firme AV prima dello scan</td></tr>
         <tr><td><strong>Boot</strong></td><td>UEFI o Legacy BIOS</td><td>—</td></tr>
       </tbody>
     </table>
@@ -155,6 +155,7 @@
           <tr><td><strong>Automount USB in /media</strong></td><td>Chiavette e dischi USB compaiono subito, pronti per salvare report e log</td></tr>
           <tr><td><strong>Documentazione stile man</strong></td><td>Crediti, licenze e manuale (C/M) usano <code>man-db</code> + <code>groff</code> + <code>less</code>: scroll affidabile su console</td></tr>
           <tr><td><strong>Tasto Q uniforme</strong></td><td>Indietro/uscita uguale ovunque (sottomenu e testi), come nei pager standard Linux</td></tr>
+          <tr><td><strong>Firmware non-free</strong></td><td>Inclusi (sezione <code>non-free-firmware</code> Debian) per coprire LAN, Wi‑Fi e mobile broadband (modem USB/4G via ModemManager)</td></tr>
           <tr><td><strong>Solo amd64</strong></td><td>Copre i PC reali in campo; build più snella</td></tr>
         </tbody>
       </table>
@@ -179,8 +180,8 @@
 
       <h3>Software principale incluso</h3>
       <p>
-        TestDisk/PhotoRec, Midnight Commander, ClamAV, YARA, GRUB, ntfs-3g, NetworkManager, smartmontools,
-        cryptsetup/dislocker, e componenti Debian documentati in menu <strong>C</strong> / Licenze.
+        TestDisk/PhotoRec, Midnight Commander, ClamAV, YARA, GRUB, ntfs-3g, NetworkManager, ModemManager, smartmontools,
+        cryptsetup/dislocker, <strong>firmware non-free</strong> per LAN/Wi‑Fi/mobile broadband, e componenti Debian in menu <strong>C</strong> / Licenze.
       </p>
 
       <h3>Come funziona (in breve)</h3>
@@ -216,6 +217,7 @@
           <tr><td><strong>USB automount under /media</strong></td><td>External drives ready for reports and logs</td></tr>
           <tr><td><strong>man-style docs</strong></td><td>Credits, licenses, manual (C/M) via <code>man-db</code> + <code>groff</code> + <code>less</code></td></tr>
           <tr><td><strong>Uniform Q key</strong></td><td>Back/exit everywhere, consistent with standard Linux pagers</td></tr>
+          <tr><td><strong>Non-free firmware</strong></td><td>Included (Debian <code>non-free-firmware</code>) for Ethernet (LAN), Wi‑Fi and mobile broadband (USB modems/4G via ModemManager)</td></tr>
           <tr><td><strong>amd64 only</strong></td><td>Matches real-world hardware; leaner build</td></tr>
         </tbody>
       </table>
