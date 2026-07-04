@@ -28,6 +28,7 @@
 </header>
 
 <nav class="top" aria-label="Navigazione principale">
+  <a href="#usb-requisiti">USB e requisiti</a>
   <a href="#download">Download</a>
   <a href="#italiano">Italiano</a>
   <a href="#english">English</a>
@@ -37,6 +38,64 @@
 </nav>
 
 <main>
+
+  <section id="usb-requisiti">
+    <h2>Chiavetta USB e requisiti / USB stick &amp; requirements</h2>
+    <p>
+      <strong>Quelo Doctor</strong> è pensata per girare da <strong>chiavetta USB</strong> (o da qualsiasi supporto avviabile):
+      scarichi l'ISO, la copi sul supporto con <strong>il metodo che preferisci</strong> e avvii il PC da lì.
+    </p>
+
+    <h3>Preparare la USB / Prepare the USB stick</h3>
+    <table>
+      <thead><tr><th>Metodo</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><a href="https://www.ventoy.net/">Ventoy</a></td>
+          <td>Copi il file <code>.iso</code> sulla chiavetta già preparata — niente riscrittura ogni volta / copy the ISO file, no full reflash each time</td>
+        </tr>
+        <tr>
+          <td><code>dd</code></td>
+          <td>Scrittura raw su Linux: <code>dd if=quelo-doctor-….iso of=/dev/sdX bs=4M status=progress</code></td>
+        </tr>
+        <tr>
+          <td>Rufus / balenaEtcher</td>
+          <td>GUI su Windows, macOS o Linux — selezioni ISO e dispositivo USB / pick ISO and USB device</td>
+        </tr>
+        <tr>
+          <td>Altri tool</td>
+          <td>Qualsiasi programma che scrive correttamente un'ISO avviabile (UEFI e/o BIOS) / any tool that writes a bootable ISO correctly</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      <strong>Avvio / Boot:</strong> inserisci la USB, accendi il PC, apri il menu boot (F12, F8, Esc…)
+      e scegli la chiavetta. Supporta <strong>UEFI</strong> e <strong>Legacy BIOS</strong>.
+    </p>
+
+    <h3>Requisiti minimi del PC / Minimum PC specs</h3>
+    <p>
+      Nessun desktop grafico — solo console testuale. Con il menu principale attivo la RAM resta
+      <strong>sotto 1 GB</strong>; adatta anche a PC datati o con poca memoria.
+    </p>
+    <table>
+      <thead><tr><th>Componente</th><th>Minimo</th><th>Consigliato</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Architettura</strong></td><td>x86_64 (amd64)</td><td>—</td></tr>
+        <tr><td><strong>RAM</strong></td><td>512 MB (menu e shell)</td><td>2 GB per scan antivirus (menu 7) o recupero su dischi grandi</td></tr>
+        <tr><td><strong>Uso tipico menu</strong></td><td>~300–800 MB a idle</td><td>—</td></tr>
+        <tr><td><strong>Processore</strong></td><td>CPU 64 bit amd64 (anche single-core)</td><td>Dual-core+ per ClamAV, TestDisk, operazioni lunghe</td></tr>
+        <tr><td><strong>Chiavetta USB</strong></td><td>2 GB (ISO ~1 GB)</td><td>4 GB+</td></tr>
+        <tr><td><strong>Schermo</strong></td><td>Console testuale / framebuffer, no GPU dedicata</td><td>—</td></tr>
+        <tr><td><strong>Rete</strong></td><td>Opzionale (menu N)</td><td>Utile per aggiornare firme AV prima dello scan</td></tr>
+        <tr><td><strong>Boot</strong></td><td>UEFI o Legacy BIOS</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <p class="note">
+      Menu <strong>7</strong> (ClamAV + YARA) e lavori su volumi molto grandi possono richiedere più RAM e CPU.
+      Su PC con 512 MB restano comodi diagnostica dischi, shell, Midnight Commander e ripristino avvio.
+    </p>
+  </section>
 
   <figure class="screenshot">
     <img src="images/principale.png" alt="Menu principale Quelo Doctor 0.75" width="800" height="600">
@@ -64,9 +123,7 @@
       L'ISO non è nel repository git (limite 100 MB di GitHub). Scaricala dalle <strong>Releases</strong>.<br>
       The ISO is not in the git tree (GitHub 100 MB limit). Download from <strong>Releases</strong>.
     </p>
-    <p>
-      <strong>Avvio / Boot:</strong> flash su USB (Ventoy, Rufus, balenaEtcher, <code>dd</code>) → avvio UEFI o Legacy BIOS.
-    </p>
+    <p>Vedi <a href="#usb-requisiti">USB e requisiti</a> per preparazione chiavetta e hardware minimo.</p>
     <a class="btn primary" href="https://github.com/alby-quelo/quelo-doctor/releases/latest">Scarica ISO / Download ISO</a>
   </section>
 

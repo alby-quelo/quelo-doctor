@@ -18,12 +18,48 @@
 
 <p align="center">
   <a href="https://alby-quelo.github.io/quelo-doctor/">Sito web / Website</a> ·
+  <a href="#usb-requisiti">USB e requisiti</a> ·
   <a href="#download">Download</a> ·
   <a href="#italiano">Italiano</a> ·
   <a href="#english">English</a> ·
   <a href="#build">Build</a> ·
   <a href="#segnalare-problemi">Segnalazioni</a>
 </p>
+
+---
+
+<a id="usb-requisiti"></a>
+## Chiavetta USB e requisiti / USB stick & requirements
+
+**Quelo Doctor** è pensata per girare da **chiavetta USB** (o da qualsiasi supporto avviabile): scarichi l'ISO dalle Releases, la copi sul supporto con **il metodo che preferisci** e avvii il PC da lì.
+
+**Metodi comuni per preparare la USB** (tutti validi):
+
+| Metodo | Note |
+|--------|------|
+| **[Ventoy](https://www.ventoy.net/)** | Copi il file `.iso` sulla chiavetta già preparata con Ventoy — niente riscrittura ogni volta |
+| **`dd`** | Scrittura raw bit-per-bit (`dd if=quelo-doctor-….iso of=/dev/sdX …`) — classico su Linux |
+| **Rufus / balenaEtcher** | GUI su Windows, macOS o Linux — selezioni l'ISO e il dispositivo USB |
+| **Altri tool** | Qualsiasi programma che scrive correttamente un'ISO avviabile (UEFI e/o BIOS) |
+
+**Avvio:** inserisci la USB, accendi il PC, entra nel menu boot (F12, F8, Esc… a seconda del modello) e scegli la chiavetta. Funziona con **UEFI** e **Legacy BIOS**.
+
+### Requisiti minimi del PC / Minimum PC specs
+
+Niente desktop grafico: solo console testuale. In uso normale (menu principale) la RAM occupata resta **sotto 1 GB**; per questo gira bene anche su macchine vecchie o con poca memoria.
+
+| Componente | Minimo | Consigliato |
+|------------|--------|-------------|
+| **Architettura** | **x86_64 (amd64)** — processore a 64 bit | Stesso |
+| **RAM** | **512 MB** (menu e shell) | **2 GB** se usi scan antivirus (menu 7) o recupero file su dischi grandi |
+| **Uso tipico menu** | ~300–800 MB RAM osservati a idle | — |
+| **Processore** | Qualsiasi CPU **64 bit** amd64 (anche single-core) | Dual-core o superiore per operazioni lunghe (ClamAV, TestDisk) |
+| **Chiavetta USB** | **2 GB** (ISO ~1 GB) | **4 GB+** — più comoda per aggiornamenti e copie di backup |
+| **Schermo** | Console testuale / framebuffer — **nessuna GPU dedicata** richiesta | — |
+| **Rete** | Opzionale (Wi‑Fi/Ethernet per menu **N**) | Utile per aggiornare firme antivirus prima dello scan |
+| **Boot** | UEFI **oppure** Legacy BIOS | — |
+
+> **Nota:** menu **7** (ClamAV + YARA) e operazioni su volumi molto grandi possono richiedere più RAM e tempo CPU; su PC con 512 MB resta usabile per diagnostica dischi, shell, mc e ripristino avvio.
 
 ---
 
@@ -43,7 +79,7 @@
 
 > L'ISO non è nel tree git (limite 100 MB di GitHub). Si scarica dalle **Releases**.
 
-**Avvio:** flash su USB (Ventoy, Rufus, balenaEtcher, `dd`) → boot UEFI o Legacy BIOS.
+Vedi sopra [USB e requisiti](#usb-requisiti) per preparazione chiavetta e hardware minimo.
 
 ---
 
