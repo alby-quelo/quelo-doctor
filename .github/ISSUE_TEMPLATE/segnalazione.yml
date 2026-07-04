@@ -1,0 +1,89 @@
+name: Segnalazione problema / Bug report
+description: Segnala un bug, un malfunzionamento hardware o un'idea di miglioramento
+title: "[0.75] "
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la segnalazione. Compila quanto più possibile: ci aiuta a riprodurre il problema.
+        / Thank you for reporting. Please fill in as much as you can.
+
+  - type: dropdown
+    id: lang
+    attributes:
+      label: Lingua / Language
+      options:
+        - Italiano
+        - English
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versione ISO / ISO version
+      description: "Es. 0.75 — leggi in alto nel menu principale"
+      placeholder: "0.75"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Area
+      options:
+        - Avvio / Boot
+        - Automount USB
+        - Menu 2 — Controllo dischi
+        - Menu 3 — File manager (mc)
+        - Menu 4 — Recupera dischi (TestDisk)
+        - Menu 5 — Recupera file
+        - Menu 6 — Ripara avvio
+        - Menu 7 — Controlla infezioni
+        - Menu 8 — Sblocca password
+        - Rete (N) / Network
+        - Crediti / Manuale (C/M)
+        - Salva rapporto (S)
+        - Build da sorgenti / Source build
+        - Altro / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passi per riprodurre / Steps to reproduce
+      placeholder: "1. Avvio da USB...\n2. Menu 2...\n3. ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento atteso / Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamento osservato / Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware (PC, dischi, UEFI/BIOS)
+      placeholder: "Es. notebook Acer, NVMe + HDD USB, UEFI"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Conferma / Confirmation
+      options:
+        - label: Ho cercato issue esistenti / I checked existing issues
+          required: true

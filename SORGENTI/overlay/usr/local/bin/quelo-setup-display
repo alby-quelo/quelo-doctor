@@ -1,0 +1,78 @@
+#!/bin/bash
+# Adatta font console e layout menu alla risoluzione del monitor collegato.
+
+LAYOUT_FILE="/run/quelo-menu-layout"
+FB="/sys/class/graphics/fb0/virtual_size"
+
+XRES=800
+YRES=600
+
+quelo_drm_best_mode() {
+  local modes mode w h best_w=0 best_h=0
+  for modes in /sys/class/drm/card*/card*-*/modes; do
+    [[ -f "${modes}" ]] || continue
+    while read -r mode; do
+      [[ "${mode}" =~ ^([0-9]+)x([0-9]+)$ ]] || continue
+      w="${BASH_REMATCH[1]}"
+      h="${BASH_REMATCH[2]}"
+      if ((w * h > best_w * best_h)); then
+        best_w="${w}"
+        best_h="${h}"
+      fi
+    done <"${modes}"
+  done
+  if ((best_w > 0 && best_h > 0)); then
+    echo "${best_w} ${best_h}"
+    return 0
+  fi
+  return 1
+}
+
+if read -r drm_w drm_h < <(quelo_drm_best_mode 2>/dev/null); then
+  XRES="${drm_w}"
+  YRES="${drm_h}"
+elif [[ -r "${FB}" ]]; then
+  read -r XRES YRES <"${FB}"
+fi
+
+SCALE_X=$((XRES * 100 / 800))
+SCALE_Y=$((YRES * 100 / 600))
+SCALE=$((SCALE_X < SCALE_Y ? SCALE_X : SCALE_Y))
+((SCALE < 100)) && SCALE=100
+((SCALE > 250)) && SCALE=250
+
+MENU_COL=$((22 * SCALE / 100))
+MENU_ROW=2
+((MENU_COL < 22)) && MENU_COL=22
+
+mkdir -p /run
+cat >"${LAYOUT_FILE}" <<EOF
+XRES=${XRES}
+YRES=${YRES}
+SCALE=${SCALE}
+MENU_COL=${MENU_COL}
+MENU_ROW=${MENU_ROW}
+EOF
+
+if ! command -v setfont >/dev/null 2>&1; then
+  exit 0
+fi
+
+CONSOLE="/dev/tty1"
+[[ -w "${CONSOLE}" ]] || CONSOLE="/dev/console"
+
+if ((YRES >= 1080 || SCALE >= 200)); then
+  setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat15-TerminusBold32x16.psf.gz 2>/dev/null \
+    || setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat2-TerminusBold32x16.psf.gz 2>/dev/null \
+    || setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat15-Terminus28x14.psf.gz 2>/dev/null \
+    || true
+elif ((YRES >= 768 || SCALE >= 140)); then
+  setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat2-TerminusBold22x11.psf.gz 2>/dev/null \
+    || setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat15-Terminus20x10.psf.gz 2>/dev/null \
+    || setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat2-Terminus16.psf.gz 2>/dev/null \
+    || true
+else
+  setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat2-TerminusBold16.psf.gz 2>/dev/null \
+    || setfont -C "${CONSOLE}" /usr/share/consolefonts/Lat15-Terminus14.psf.gz 2>/dev/null \
+    || true
+fi

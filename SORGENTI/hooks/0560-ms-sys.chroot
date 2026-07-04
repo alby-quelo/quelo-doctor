@@ -1,0 +1,29 @@
+#!/bin/bash
+# ms-sys non e piu nei repository Debian: compila da sorgente SourceForge.
+set -e
+
+MS_SYS_VERSION="2.8.0"
+MS_SYS_URL="https://sourceforge.net/projects/ms-sys/files/ms-sys%20stable/${MS_SYS_VERSION}/ms-sys-${MS_SYS_VERSION}.tar.gz/download"
+
+if command -v ms-sys >/dev/null 2>&1; then
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y --no-install-recommends build-essential gettext ca-certificates curl
+
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+cd "${tmpdir}"
+curl -fsSL -o ms-sys.tar.gz "${MS_SYS_URL}"
+tar xzf ms-sys.tar.gz
+cd "ms-sys-${MS_SYS_VERSION}"
+make
+make install
+command -v ms-sys >/dev/null 2>&1
+
+apt-get purge -y build-essential gettext
+apt-get autoremove -y --purge
+apt-get clean

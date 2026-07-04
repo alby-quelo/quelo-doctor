@@ -1,0 +1,2 @@
+7 — CHECK INFECTIONS
+ClamAV, YARA, persistence, rootkit scans. Connect network (N) for updates.

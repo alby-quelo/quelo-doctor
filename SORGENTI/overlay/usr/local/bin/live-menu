@@ -1,0 +1,663 @@
+#!/bin/bash
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-console-quiet.sh
+quelo_console_quiet_on
+
+QD_VER="$(tr -d '[:space:]' </etc/quelo-doctor-version 2>/dev/null || echo "?")"
+MENU_COL=22
+MENU_ROW=2
+PROMPT_ROW=20
+MENU_SEP_LEN=40
+
+# Fosfori CRT: verde e ambra
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RESET=$'\033[0m'
+
+quelo_load_layout() {
+  if [[ -f /run/quelo-menu-layout ]]; then
+    # shellcheck disable=SC1091
+    source /run/quelo-menu-layout
+  fi
+}
+
+quelo_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_t() {
+  if quelo_ui_is_en; then
+    case "$1" in
+      menu_shell)      echo "ENTER SHELL (root)" ;;
+      menu_locale)     echo "CHOOSE LOCALE" ;;
+      menu_network)    echo "CONFIGURE NETWORK" ;;
+      menu_disks)      echo "DISK CHECK" ;;
+      menu_files)      echo "FILE MANAGER (mc)" ;;
+      menu_recover)    echo "DISK RECOVERY (TestDisk)" ;;
+      menu_rfiles)     echo "RECOVER FILES" ;;
+      menu_boot)       echo "REPAIR OS BOOT" ;;
+      menu_scan)       echo "CHECK INFECTIONS / CURE PC" ;;
+      menu_unlock)     echo "UNLOCK PASSWORDS AND ENCRYPTION (experimental)" ;;
+      menu_credits)    echo "CREDITS AND LICENSES" ;;
+      menu_manual)     echo "USER MANUAL" ;;
+      menu_save)       echo "SAVE REPORT / LOG" ;;
+      menu_poweroff)   echo "SHUTDOWN PC" ;;
+      menu_reboot)     echo "REBOOT PC" ;;
+      prompt_choice)   echo "Choice: " ;;
+      invalid_choice)  echo "Invalid choice." ;;
+      locale_title)    echo "CHOOSE LOCALE" ;;
+      screen_lang)     echo "Screen language:" ;;
+      lang_it)         echo "Italian" ;;
+      lang_en)         echo "English" ;;
+      prompt_lang)     echo "Language choice: " ;;
+      invalid_lang)    echo "Invalid language." ;;
+      keyboard_layout) echo "Keyboard layout:" ;;
+      kb_it)           echo "Italian" ;;
+      kb_uk)           echo "English (UK)" ;;
+      kb_us)           echo "English (USA)" ;;
+      kb_de)           echo "German" ;;
+      prompt_kb)       echo "Keyboard choice: " ;;
+      invalid_kb)      echo "Invalid keyboard layout." ;;
+      locale_updated)  echo "Locale updated." ;;
+      lang_label)      echo "Language:" ;;
+      kb_label)        echo "Keyboard:" ;;
+      section_main)    echo "MAIN" ;;
+      section_env)     echo "ENVIRONMENT" ;;
+      section_power)   echo "POWER MANAGEMENT" ;;
+      env_kb)          echo "Keyboard" ;;
+      env_locale)      echo "Locale" ;;
+      env_resolution)  echo "Resolution" ;;
+      env_ram)         echo "RAM" ;;
+      env_kernel)      echo "Kernel" ;;
+      env_ip)          echo "IP" ;;
+      env_no_network)  echo "Not connected to network" ;;
+      tagline)         echo "The answer is inside you… but it's wrong" ;;
+      confirm_shutdown) echo "Do you really want to shut down? [s/n]: " ;;
+      confirm_reboot)   echo "Do you really want to reboot? [s/n]: " ;;
+      net_wait)         echo "Connecting to network..." ;;
+      net_skip)         echo "skip" ;;
+    esac
+  else
+    case "$1" in
+      menu_shell)      echo "ENTRA NELLA SHELL (root)" ;;
+      menu_locale)     echo "SCEGLI LOCALE" ;;
+      menu_network)    echo "CONFIGURA RETE" ;;
+      menu_disks)      echo "CONTROLLO DISCHI" ;;
+      menu_files)      echo "GESTIONE FILE (mc)" ;;
+      menu_recover)    echo "RECUPERA DISCHI (TestDisk)" ;;
+      menu_rfiles)     echo "RECUPERA FILE" ;;
+      menu_boot)       echo "RIPARA AVVIO SISTEMA OPERATIVO" ;;
+      menu_scan)       echo "CONTROLLA INFEZIONI E CURA PC" ;;
+      menu_unlock)     echo "SBLOCCA PASSWORD E CRIPTAZIONI (experimental)" ;;
+      menu_credits)    echo "CREDITI E LICENZE" ;;
+      menu_manual)     echo "MANUALE" ;;
+      menu_save)       echo "SALVA RAPPORTO / LOG" ;;
+      menu_poweroff)   echo "SPEGNI IL PC" ;;
+      menu_reboot)     echo "RIAVVIA IL PC" ;;
+      prompt_choice)   echo "Scelta: " ;;
+      invalid_choice)  echo "Scelta non valida." ;;
+      locale_title)    echo "SCEGLI LOCALE" ;;
+      screen_lang)     echo "Lingua a schermo:" ;;
+      lang_it)         echo "Italiano" ;;
+      lang_en)         echo "English" ;;
+      prompt_lang)     echo "Scelta lingua: " ;;
+      invalid_lang)    echo "Lingua non valida." ;;
+      keyboard_layout) echo "Layout tastiera:" ;;
+      kb_it)           echo "Italiano" ;;
+      kb_uk)           echo "English (UK)" ;;
+      kb_us)           echo "English (USA)" ;;
+      kb_de)           echo "Deutsch" ;;
+      prompt_kb)       echo "Scelta tastiera: " ;;
+      invalid_kb)      echo "Layout tastiera non valido." ;;
+      locale_updated)  echo "Locale aggiornato." ;;
+      lang_label)      echo "Lingua:" ;;
+      kb_label)        echo "Tastiera:" ;;
+      section_main)    echo "PRINCIPALE" ;;
+      section_env)     echo "AMBIENTE" ;;
+      section_power)   echo "POWER MANAGEMENT" ;;
+      env_kb)          echo "Tastiera" ;;
+      env_locale)      echo "Locale" ;;
+      env_resolution)  echo "Risoluzione" ;;
+      env_ram)         echo "RAM" ;;
+      env_kernel)      echo "Kernel" ;;
+      env_ip)          echo "IP" ;;
+      env_no_network)  echo "Non connesso alla rete" ;;
+      tagline)         echo "La risposta è dentro di te… però è sbagliata" ;;
+      confirm_shutdown) echo "Vuoi davvero spegnere? [s/n]: " ;;
+      confirm_reboot)   echo "Vuoi davvero riavviare? [s/n]: " ;;
+      net_wait)         echo "Connessione alla rete in corso..." ;;
+      net_skip)         echo "salta" ;;
+    esac
+  fi
+}
+
+quelo_goto() {
+  printf '\033[%d;%dH' "$1" "$2"
+}
+
+quelo_sep() {
+  local ch="$1"
+  printf '%*s\n' "${MENU_SEP_LEN}" '' | tr ' ' "${ch}"
+}
+
+quelo_update_sep_len() {
+  local cols=40
+  if [[ -n "${SCALE:-}" ]]; then
+    cols=$((40 * SCALE / 100))
+    ((cols < 28)) && cols=28
+    ((cols > 56)) && cols=56
+  fi
+  MENU_SEP_LEN="${cols}"
+}
+
+quelo_is_ipv4() {
+  [[ "${1}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+quelo_primary_ip_once() {
+  local ip iface
+
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ { for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+    if quelo_is_ipv4 "${ip}"; then
+      echo "${ip}"
+      return 0
+    fi
+
+    while read -r iface ip _; do
+      [[ "${iface}" == "lo" ]] && continue
+      ip="${ip%/*}"
+      if quelo_is_ipv4 "${ip}"; then
+        echo "${ip}"
+        return 0
+      fi
+    done < <(ip -4 -o addr show 2>/dev/null | awk '$3 == "inet" { print $2, $4 }')
+  fi
+
+  if [[ -r /sys/class/net ]]; then
+    for iface in /sys/class/net/*; do
+      iface="${iface##*/}"
+      [[ "${iface}" == "lo" ]] && continue
+      if [[ -r "/sys/class/net/${iface}/address" ]]; then
+        ip="$(ip -4 -o addr show dev "${iface}" 2>/dev/null | awk '$3 == "inet" { split($4, a, "/"); print a[1]; exit }')"
+        if quelo_is_ipv4 "${ip}"; then
+          echo "${ip}"
+          return 0
+        fi
+      fi
+    done
+  fi
+
+  for ip in $(hostname -I 2>/dev/null); do
+    if quelo_is_ipv4 "${ip}"; then
+      echo "${ip}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+quelo_primary_ip() {
+  quelo_primary_ip_once
+}
+
+quelo_net_boot_line() {
+  printf '\033[33m%s\033[0m [Q: %s]\n' "$(quelo_t net_wait)" "$(quelo_t net_skip)" >/dev/tty 2>/dev/null || true
+}
+
+quelo_key_is_esc() {
+  local timeout="${1:-1}"
+  local key
+
+  if IFS= read -r -n 1 -t "${timeout}" key </dev/tty 2>/dev/null; then
+    [[ "${key}" == [qQ] ]] && return 0
+  fi
+  return 1
+}
+
+# DHCP spesso arriva dopo il getty: attendi solo se c'è link ma non ancora IP.
+quelo_net_has_carrier() {
+  local iface state carrier
+
+  [[ -r /sys/class/net ]] || return 1
+
+  for iface in /sys/class/net/*; do
+    iface="${iface##*/}"
+    [[ "${iface}" == "lo" ]] && continue
+
+    state="$(cat "/sys/class/net/${iface}/operstate" 2>/dev/null)" || continue
+    carrier="$(cat "/sys/class/net/${iface}/carrier" 2>/dev/null)" || carrier=0
+
+    if [[ "${state}" == "up" || "${carrier}" == "1" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+quelo_wait_for_network() {
+  local ip i
+
+  [[ -f /run/quelo-menu-net-probed ]] && return 0
+
+  ip="$(quelo_primary_ip_once)"
+  if [[ -n "${ip}" ]]; then
+    touch /run/quelo-menu-net-probed
+    return 0
+  fi
+
+  if ! quelo_net_has_carrier; then
+    touch /run/quelo-menu-net-probed
+    return 0
+  fi
+
+  quelo_net_boot_line
+  for i in $(seq 1 20); do
+    if quelo_key_is_esc 1; then
+      touch /run/quelo-menu-net-probed
+      return 0
+    fi
+    ip="$(quelo_primary_ip_once)"
+    if [[ -n "${ip}" ]]; then
+      touch /run/quelo-menu-net-probed
+      return 0
+    fi
+  done
+
+  touch /run/quelo-menu-net-probed
+}
+
+quelo_env_line1() {
+  local kb locale res
+
+  kb="$(grep '^XKBLAYOUT=' /etc/default/keyboard 2>/dev/null | cut -d= -f2 | tr -d '"')"
+  [[ -z "${kb}" ]] && kb="?"
+
+  locale="${LANG:-$(grep '^LANG=' /etc/default/locale 2>/dev/null | cut -d= -f2)}"
+  [[ -z "${locale}" ]] && locale="?"
+
+  if [[ -n "${XRES:-}" && -n "${YRES:-}" ]]; then
+    res="${XRES}x${YRES}"
+  else
+    res="?"
+  fi
+
+  printf '%s: %s | %s: %s | %s: %s' \
+    "$(quelo_t env_kb)" "${kb}" \
+    "$(quelo_t env_locale)" "${locale}" \
+    "$(quelo_t env_resolution)" "${res}"
+}
+
+quelo_env_line2() {
+  local total avail kernel net
+
+  if [[ -r /proc/meminfo ]]; then
+    total="$(awk '/^MemTotal:/{print int($2 / 1024)}' /proc/meminfo)"
+    avail="$(awk '/^MemAvailable:/{print int($2 / 1024)}' /proc/meminfo)"
+    used=$((total - avail))
+  else
+    total="?"
+    used="?"
+  fi
+
+  kernel="$(uname -r)"
+
+  ip_addr="$(quelo_primary_ip)"
+  if [[ -n "${ip_addr}" ]]; then
+    net="$(quelo_t env_ip): ${ip_addr}"
+  else
+    net="$(quelo_t env_no_network)"
+  fi
+
+  printf '%s: %s/%s MiB | %s: %s | %s' \
+    "$(quelo_t env_ram)" "${used}" "${total}" \
+    "$(quelo_t env_kernel)" "${kernel}" \
+    "${net}"
+}
+
+quelo_draw_screen() {
+  local row="${MENU_ROW}"
+
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  clear
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+  quelo_load_layout
+
+  if command -v python3 >/dev/null 2>&1 && [[ -w /dev/fb0 ]]; then
+    python3 /usr/local/bin/quelo-show-logo 2>/dev/null || true
+    quelo_load_layout
+  fi
+
+  quelo_update_sep_len
+
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b %s alpha%b\n' \
+    "${C_GREEN_BOLD}" "QUELO DOCTOR" "${C_GREEN}" "${QD_VER}" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  quelo_sep '-'
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b"%s"%b\n' "${C_GREEN}" "$(quelo_t tagline)" "${C_RESET}"
+
+  row=$((row + 2))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b\n' "${C_AMBER}" "$(quelo_t section_main)" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "1  -  $(quelo_t menu_shell)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "2  -  $(quelo_t menu_disks)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "3  -  $(quelo_t menu_files)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "4  -  $(quelo_t menu_recover)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "5  -  $(quelo_t menu_rfiles)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "6  -  $(quelo_t menu_boot)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "7  -  $(quelo_t menu_scan)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "8  -  $(quelo_t menu_unlock)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  quelo_sep '_'
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b\n' "${C_AMBER}" "$(quelo_t section_env)" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "L  -  $(quelo_t menu_locale)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "N  -  $(quelo_t menu_network)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  quelo_sep '_'
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b\n' "${C_AMBER}" "$(quelo_env_line1)" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b\n' "${C_AMBER}" "$(quelo_env_line2)" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  quelo_sep '-'
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "C  -  $(quelo_t menu_credits)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "M  -  $(quelo_t menu_manual)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "S  -  $(quelo_t menu_save)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  quelo_sep '-'
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  printf '%b%s%b\n' "${C_GREEN}" "$(quelo_t section_power)" "${C_RESET}"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "Alt+Z  -  $(quelo_t menu_poweroff)"
+
+  row=$((row + 1))
+  quelo_goto "${row}" "${MENU_COL}"
+  echo "Alt+R  -  $(quelo_t menu_reboot)"
+
+  PROMPT_ROW=$((row + 2))
+  quelo_goto "${PROMPT_ROW}" "${MENU_COL}"
+  printf "%s" "$(quelo_t prompt_choice)"
+}
+
+quelo_apply_lang() {
+  local lang
+  case "${1}" in
+    1) lang="it_IT.UTF-8" ;;
+    2) lang="en_US.UTF-8" ;;
+    *) return 1 ;;
+  esac
+
+  cat >/etc/default/locale <<EOF
+LANG=${lang}
+LC_ALL=${lang}
+EOF
+
+  export LANG="${lang}" LC_ALL="${lang}"
+}
+
+quelo_apply_keyboard() {
+  local layout
+  case "${1}" in
+    1) layout="it" ;;
+    2) layout="gb" ;;
+    3) layout="us" ;;
+    4) layout="de" ;;
+    *) return 1 ;;
+  esac
+
+  cat >/etc/default/keyboard <<EOF
+# KEYBOARD CONFIGURATION FILE
+
+XKBMODEL="pc105"
+XKBLAYOUT="${layout}"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+EOF
+
+  if command -v setupcon >/dev/null 2>&1; then
+    setupcon --force --save-only 2>/dev/null || setupcon --force 2>/dev/null || true
+  fi
+  if command -v loadkeys >/dev/null 2>&1; then
+    loadkeys "${layout}" 2>/dev/null || true
+  fi
+}
+
+quelo_menu_locale() {
+  local lang_key kb_key
+
+  clear
+  echo "=================================="
+  echo "         $(quelo_t locale_title)"
+  echo "=================================="
+  echo ""
+  echo "  $(quelo_t screen_lang)"
+  echo "    1  -  $(quelo_t lang_it)"
+  echo "    2  -  $(quelo_t lang_en)"
+  echo ""
+  read -r -n 1 -p "  $(quelo_t prompt_lang)" lang_key
+  echo ""
+
+  if ! quelo_apply_lang "${lang_key}"; then
+    echo "  $(quelo_t invalid_lang)"
+    sleep 1
+    return
+  fi
+
+  echo ""
+  echo "  $(quelo_t keyboard_layout)"
+  echo "    1  -  $(quelo_t kb_it)"
+  echo "    2  -  $(quelo_t kb_uk)"
+  echo "    3  -  $(quelo_t kb_us)"
+  echo "    4  -  $(quelo_t kb_de)"
+  echo ""
+  read -r -n 1 -p "  $(quelo_t prompt_kb)" kb_key
+  echo ""
+
+  if ! quelo_apply_keyboard "${kb_key}"; then
+    echo "  $(quelo_t invalid_kb)"
+    sleep 1
+    return
+  fi
+
+  echo ""
+  echo "  $(quelo_t locale_updated)"
+  echo "  $(quelo_t lang_label)  ${LANG}"
+  echo "  $(quelo_t kb_label) $(grep '^XKBLAYOUT=' /etc/default/keyboard | cut -d= -f2 | tr -d '"')"
+  sleep 2
+}
+
+quelo_launch_submenu() {
+  local bin="$1"
+
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  if command -v tput >/dev/null 2>&1; then
+    tput reset >/dev/tty 2>/dev/null || true
+  fi
+  clear >/dev/tty 2>/dev/null || clear
+
+  if [[ ! -f "${bin}" ]]; then
+    printf '\n  ERRORE: manca %s\n' "${bin}" >/dev/tty 2>/dev/null || printf '\n  ERRORE: manca %s\n' "${bin}"
+    printf '  Premi un tasto...\n' >/dev/tty 2>/dev/null || true
+    read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+    return 1
+  fi
+  if [[ ! -x "${bin}" ]]; then
+    chmod +x "${bin}" 2>/dev/null || true
+  fi
+  if [[ ! -x "${bin}" ]]; then
+    printf '\n  ERRORE: %s non eseguibile\n' "${bin}" >/dev/tty 2>/dev/null || true
+    read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+    return 1
+  fi
+  "${bin}"
+}
+
+quelo_confirm_power() {
+  local action="$1"
+  local prompt reply
+
+  case "${action}" in
+    poweroff) prompt="$(quelo_t confirm_shutdown)" ;;
+    reboot)   prompt="$(quelo_t confirm_reboot)" ;;
+    *) return 1 ;;
+  esac
+
+  quelo_load_layout
+  quelo_goto "${PROMPT_ROW}" "${MENU_COL}"
+  read -r -n 1 -p "${prompt}" reply
+  echo ""
+
+  case "${reply}" in
+    s|S)
+      case "${action}" in
+        poweroff) /sbin/poweroff -f ;;
+        reboot)   /sbin/reboot -f ;;
+      esac
+      ;;
+  esac
+}
+
+while true; do
+  quelo_wait_for_network
+  quelo_draw_screen
+  read -r -n 1 scelta
+
+  if [[ "${scelta}" == $'\e' ]]; then
+    scelta=""
+    if IFS= read -r -n 1 -t 0.3 scelta2; then
+      case "${scelta2}" in
+        z|Z) scelta="__ALT_Z__" ;;
+        r|R) scelta="__ALT_R__" ;;
+      esac
+    fi
+  fi
+
+  echo ""
+
+  case "${scelta}" in
+    1)
+      /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+      clear
+      quelo_console_quiet_off
+      export QUELO_IN_SHELL=1
+      export PS1='root@quelo-doctor:\w# '
+      exec /bin/bash --login -i
+      ;;
+    2)
+      /usr/local/bin/quelo-disks
+      ;;
+    3)
+      /usr/local/bin/quelo-mc
+      ;;
+    4)
+      /usr/local/bin/quelo-recover
+      ;;
+    5)
+      quelo_launch_submenu /usr/local/bin/quelo-recover-files
+      ;;
+    6)
+      quelo_launch_submenu /usr/local/bin/quelo-boot-repair
+      ;;
+    7)
+      quelo_launch_submenu /usr/local/bin/quelo-scan
+      ;;
+    8)
+      quelo_launch_submenu /usr/local/bin/quelo-unlock
+      ;;
+    c|C)
+      quelo_launch_submenu /usr/local/bin/quelo-credits
+      ;;
+    m|M)
+      quelo_launch_submenu /usr/local/bin/quelo-manual
+      ;;
+    s|S)
+      quelo_launch_submenu /usr/local/bin/quelo-save-report
+      ;;
+    l|L)
+      quelo_menu_locale
+      ;;
+    n|N)
+      /usr/local/bin/quelo-network
+      ;;
+    __ALT_Z__)
+      quelo_confirm_power poweroff
+      ;;
+    __ALT_R__)
+      quelo_confirm_power reboot
+      ;;
+    *)
+      quelo_goto "${PROMPT_ROW}" "${MENU_COL}"
+      echo "$(quelo_t invalid_choice)"
+      sleep 1
+      ;;
+  esac
+done

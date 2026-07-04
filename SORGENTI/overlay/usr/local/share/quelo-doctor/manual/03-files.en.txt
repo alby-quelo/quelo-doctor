@@ -1,0 +1,2 @@
+3 — FILE MANAGER (mc)
+Midnight Commander. Mounted disks under /media/

@@ -1,0 +1,63 @@
+CREDITS — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+CORRADO GUZZANTI
+  Creator of the QUELO character that inspired this rescue
+  distribution. Thank you for the idea and the character name.
+
+──────────────────────────────────────────────────────────────
+THIRD-PARTY SOFTWARE (beyond Debian core)
+  Format: NAME → use in Quelo Doctor
+
+TestDisk / PhotoRec → Menu 4 DISK RECOVERY
+  https://www.cgsecurity.org/
+
+Midnight Commander (mc) → Menu 3 FILE MANAGER
+  https://midnight-commander.org/
+
+ClamAV / freshclam → Menu 7 antivirus
+  https://www.clamav.net/
+
+YARA + community rules (Yara-Rules) → Menu 7 scan
+  https://virustotal.github.io/yara/
+
+chkrootkit → Menu 7 Linux rootkit scan
+  http://www.chkrootkit.org/
+
+extundelete / ext4magic → Menu 5 file recovery (ext)
+
+ntfs-3g → Menu 5 NTFS recovery
+  https://www.tuxera.com/community/open-source-ntfs-3g/
+
+GRUB / os-prober / efibootmgr → Menu 6 boot repair
+
+ms-sys → Menu 6 Windows MBR (built from SourceForge source)
+  https://ms-sys.sourceforge.net/
+
+chntpw → Menu 8 Windows passwords
+  https://pogostick.net/~pnh/ntpasswd/
+
+cryptsetup → Menu 8 LUKS unlock
+  https://gitlab.com/cryptsetup/cryptsetup
+
+dislocker → Menu 8 BitLocker unlock
+  https://github.com/Aorimn/dislocker
+
+smartmontools / nvme-cli → Menu 2 disk SMART
+NetworkManager / wpasupplicant → Menu N network
+
+WiFi/Ethernet firmware (Debian firmware-* packages)
+  Respective hardware vendors.
+
+Python 3 / PIL → logo and framebuffer UI
+
+Debian Live / live-build → live ISO structure
+  https://www.debian.org/
+
+man-db / groff-base / less → Menu C and M (man-style document viewer)
+  https://www.gnu.org/software/groff/
+
+──────────────────────────────────────────────────────────────
+QUELO DOCTOR (menus, scripts, overlay)
+  Original project — see Licenses.
+  C/M text viewer: quelo-pager.sh (txt → troff → man -l → less).

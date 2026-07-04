@@ -1,0 +1,13 @@
+[Unit]
+Description=Quelo Doctor console font scaling
+DefaultDependencies=no
+After=systemd-udev-settle.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/quelo-setup-display
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

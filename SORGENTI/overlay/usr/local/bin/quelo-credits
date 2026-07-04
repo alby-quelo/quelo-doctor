@@ -1,0 +1,107 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+DOC_DIR="/usr/local/share/quelo-doctor"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-pager.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RESET=$'\033[0m'
+
+quelo_credits_ttyln() {
+  printf '%b\n' "$*" >/dev/tty 2>/dev/null || printf '%b\n' "$*"
+}
+
+quelo_credits_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_credits_lang() {
+  quelo_credits_ui_is_en && echo "en" || echo "it"
+}
+
+quelo_credits_t() {
+  if quelo_credits_ui_is_en; then
+    case "$1" in
+      title)    echo "CREDITS AND LICENSES" ;;
+      op_cred)  echo "Credits" ;;
+      op_lic)   echo "Licenses" ;;
+      help)     echo "Number=choice | Q=back/exit | text: arrows PgUp/PgDn" ;;
+      prompt)   echo "Choice: " ;;
+      invalid)  echo "Invalid choice." ;;
+      missing)  echo "File not found." ;;
+    esac
+  else
+    case "$1" in
+      title)    echo "CREDITI E LICENZE" ;;
+      op_cred)  echo "Crediti" ;;
+      op_lic)   echo "Licenze" ;;
+      help)     echo "Numero=scelta | Q=indietro/esci | testo: frecce PgSu/PgGiu" ;;
+      prompt)   echo "Scelta: " ;;
+      invalid)  echo "Scelta non valida." ;;
+      missing)  echo "File non trovato." ;;
+    esac
+  fi
+}
+
+quelo_credits_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_credits_show_file() {
+  local kind="$1" file lang title
+
+  lang="$(quelo_credits_lang)"
+  file="${DOC_DIR}/${kind}.${lang}.txt"
+  [[ -f "${file}" ]] || file="${DOC_DIR}/${kind}.it.txt"
+  [[ -f "${file}" ]] || { quelo_credits_ttyln "  $(quelo_credits_t missing)"; sleep 2; return 1; }
+  if [[ "${kind}" == "credits" ]]; then
+    title="$(quelo_credits_t op_cred)"
+  else
+    title="$(quelo_credits_t op_lic)"
+  fi
+  quelo_pager_show "${file}" "${title}" "quelo-${kind}"
+}
+
+quelo_credits_menu() {
+  local choice key
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+
+  while true; do
+    quelo_credits_ui_reset
+    quelo_credits_ttyln "=================================="
+    quelo_credits_ttyln "${C_GREEN_BOLD}      $(quelo_credits_t title)${C_RESET}"
+    quelo_credits_ttyln "=================================="
+    quelo_credits_ttyln ""
+    quelo_credits_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_credits_t op_cred)"
+    quelo_credits_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_credits_t op_lic)"
+    quelo_credits_ttyln ""
+    quelo_credits_ttyln "${C_AMBER}  $(quelo_credits_t help)${C_RESET}"
+    printf "${C_AMBER}  %s${C_RESET}" "$(quelo_credits_t prompt)" >/dev/tty 2>/dev/null
+    if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+      return 0
+    fi
+    [[ "${key}" == [qQ] ]] && { printf '\n' >/dev/tty 2>/dev/null; return 0; }
+    printf '\n' >/dev/tty 2>/dev/null
+    choice="${key}"
+    case "${choice}" in
+      1) quelo_credits_show_file "credits" ;;
+      2) quelo_credits_show_file "licenses" ;;
+      *) quelo_credits_ttyln "  $(quelo_credits_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+quelo_credits_menu

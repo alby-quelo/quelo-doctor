@@ -1,0 +1,46 @@
+LICENSES — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+OPERATING SYSTEM — DEBIAN
+──────────────────────────────────────────────────────────────
+Quelo Doctor is based on Debian GNU/Linux.
+OS and Debian packages follow the Debian Free Software Guidelines
+(DFSG) and each package's license
+(/usr/share/doc/<package>/copyright).
+
+  https://www.debian.org/social_contract
+
+──────────────────────────────────────────────────────────────
+THIRD-PARTY SOFTWARE (main licenses)
+──────────────────────────────────────────────────────────────
+TestDisk / PhotoRec     → GPL
+Midnight Commander      → GPL
+ClamAV                  → GPL v2
+YARA                    → Apache License 2.0
+chkrootkit              → GPL / Artistic
+extundelete / ext4magic → GPL
+ntfs-3g                 → GPL
+GRUB                    → GPL v3
+ms-sys                  → GPL
+chntpw                  → GPL
+cryptsetup              → GPL v2
+dislocker               → GPL v2
+man-db                  → GPL v2+
+groff-base              → GPL v3+
+less                    → GPL v3+ (or BSD — see copyright)
+Firmware packages       → vendor licenses (non-free-firmware)
+
+Full text per package: /usr/share/doc/PACKAGE/copyright
+
+YARA community rules: see individual rule in
+  /usr/local/share/quelo-scan/yara/
+
+──────────────────────────────────────────────────────────────
+QUELO DOCTOR — ORIGINAL PROJECT
+──────────────────────────────────────────────────────────────
+Original menus, scripts, overlay, docs:
+
+  Creative Commons Attribution-NonCommercial 4.0 (CC BY-NC 4.0)
+  https://creativecommons.org/licenses/by-nc/4.0/
+
+  Attribution required. Non-commercial use unless authorized.

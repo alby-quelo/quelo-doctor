@@ -1,0 +1,2 @@
+1 — ROOT SHELL
+Opens interactive root Bash. exit to return to menu.

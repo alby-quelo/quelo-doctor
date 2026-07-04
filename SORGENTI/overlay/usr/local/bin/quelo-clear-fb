@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Pulisce il framebuffer prima del menu (non usato durante il boot)."""
+import array
+import fcntl
+import os
+import struct
+
+FB_PATH = "/dev/fb0"
+FBIOGET_VSCREENINFO = 0x4600
+FBIOGET_FSCREENINFO = 0x4602
+
+
+def write_pixel(fb, offset, bpp_bytes):
+    fb.seek(offset)
+    if bpp_bytes == 4:
+        fb.write(b"\x00\x00\x00\x00")
+    elif bpp_bytes == 3:
+        fb.write(b"\x00\x00\x00")
+    else:
+        fb.write(struct.pack("H", 0))
+
+
+def main():
+    if not os.path.exists(FB_PATH) or not os.access(FB_PATH, os.W_OK):
+        return
+
+    try:
+        vbuf = array.array("B", bytes(160))
+        with open(FB_PATH, "rb+") as fb:
+            fcntl.ioctl(fb, FBIOGET_VSCREENINFO, vbuf, True)
+            xres, yres, _, _, _, _, bpp = struct.unpack_from("7I", bytes(vbuf))
+
+            fbuf = array.array("B", bytes(80))
+            fcntl.ioctl(fb, FBIOGET_FSCREENINFO, fbuf, True)
+            line_length = struct.unpack_from("I", bytes(fbuf), 32)[0] or (xres * (bpp // 8))
+            bpp_bytes = bpp // 8
+
+            for y in range(yres):
+                row = y * line_length
+                for x in range(xres):
+                    write_pixel(fb, row + x * bpp_bytes, bpp_bytes)
+    except OSError:
+        return
+
+
+if __name__ == "__main__":
+    main()

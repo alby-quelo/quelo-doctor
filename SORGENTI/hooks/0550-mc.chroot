@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+chmod 0755 /usr/local/bin/quelo-mc /usr/local/bin/quelo-mc-functions.sh
+
+mkdir -p /etc/mc/skins /usr/share/mc/skins /media /root/.config/mc
+
+if [[ -f /etc/mc/skins/quelo-doctor.ini ]]; then
+  cp /etc/mc/skins/quelo-doctor.ini /usr/share/mc/skins/quelo-doctor.ini
+fi
+
+if [[ -f /etc/mc/mc.ini ]]; then
+  cp /etc/mc/mc.ini /root/.config/mc/ini
+fi
+
+if [[ -d /etc/mc/hints ]]; then
+  mkdir -p /usr/share/mc/hints /root/.config/mc/hints
+  cp -a /etc/mc/hints/. /usr/share/mc/hints/ 2>/dev/null || true
+  cp -a /etc/mc/hints/. /root/.config/mc/hints/ 2>/dev/null || true
+fi

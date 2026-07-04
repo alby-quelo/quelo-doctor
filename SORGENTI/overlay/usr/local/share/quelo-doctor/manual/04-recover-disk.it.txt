@@ -1,0 +1,11 @@
+4 — RECUPERA DISCHI (TestDisk)
+══════════════════════════════════════════════════════════════
+Flusso: scegli disco → avvia TestDisk.
+
+Usare quando
+  - Tabella partizioni corrotta o persa
+  - Disco visto come non allocato
+  - Partizioni scomparse dopo errore
+
+TestDisk analizza e può ripristinare strutture MBR/GPT.
+Seguire le istruzioni a schermo di TestDisk.

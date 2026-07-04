@@ -1,0 +1,19 @@
+7 — CONTROLLA INFEZIONI E CURA PC
+══════════════════════════════════════════════════════════════
+Flusso: disco → banner rete/definizioni → operazione.
+
+Operazioni
+  1 Scansione completa (ClamAV + persistenza + YARA + rootkit)
+  2 Virus/malware (solo ClamAV)
+  3 Persistenza e avvio automatico
+  4 Adware / estensioni browser
+  5 Rootkit (Linux)
+  6 Solo aggiornamento definizioni
+
+Modalità azione
+  - Solo report
+  - Quarantena automatica
+  - Chiedi per ogni minaccia
+
+Rete consigliata per aggiornare definizioni (menu N).
+Salvataggio log .txt a fine scansione.

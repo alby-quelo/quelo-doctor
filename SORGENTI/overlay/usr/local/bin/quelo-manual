@@ -1,0 +1,136 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+DOC_DIR="/usr/local/share/quelo-doctor/manual"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-pager.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RESET=$'\033[0m'
+
+MANUAL_FILES=(
+  "general"
+  "01-shell"
+  "02-disks"
+  "03-files"
+  "04-recover-disk"
+  "05-recover-files"
+  "06-boot"
+  "07-scan"
+  "08-unlock"
+  "09-env"
+)
+
+quelo_manual_ttyln() {
+  printf '%b\n' "$*" >/dev/tty 2>/dev/null || printf '%b\n' "$*"
+}
+
+quelo_manual_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_manual_lang() {
+  quelo_manual_ui_is_en && echo "en" || echo "it"
+}
+
+quelo_manual_t() {
+  if quelo_manual_ui_is_en; then
+    case "$1" in
+      title)    echo "USER MANUAL" ;;
+      op1)      echo "General" ;;
+      op2)      echo "1 — Root shell" ;;
+      op3)      echo "2 — Disk check" ;;
+      op4)      echo "3 — File manager" ;;
+      op5)      echo "4 — Disk recovery (TestDisk)" ;;
+      op6)      echo "5 — Recover files" ;;
+      op7)      echo "6 — Repair OS boot" ;;
+      op8)      echo "7 — Check infections" ;;
+      op9)      echo "8 — Unlock passwords (experimental)" ;;
+      op10)     echo "0 — Locale and network (L/N)" ;;
+      help)     echo "Number=choice | Q=back/exit | text: arrows PgUp/PgDn" ;;
+      prompt)   echo "Choice: " ;;
+      invalid)  echo "Invalid choice." ;;
+      missing)  echo "File not found." ;;
+    esac
+  else
+    case "$1" in
+      title)    echo "MANUALE D'USO" ;;
+      op1)      echo "Generale" ;;
+      op2)      echo "1 — Shell root" ;;
+      op3)      echo "2 — Controllo dischi" ;;
+      op4)      echo "3 — Gestione file" ;;
+      op5)      echo "4 — Recupera dischi (TestDisk)" ;;
+      op6)      echo "5 — Recupera file" ;;
+      op7)      echo "6 — Ripara avvio S.O." ;;
+      op8)      echo "7 — Controlla infezioni" ;;
+      op9)      echo "8 — Sblocca password (experimental)" ;;
+      op10)     echo "0 — Locale e rete (L/N)" ;;
+      help)     echo "Numero=scelta | Q=indietro/esci | testo: frecce PgSu/PgGiu" ;;
+      prompt)   echo "Scelta: " ;;
+      invalid)  echo "Scelta non valida." ;;
+      missing)  echo "File non trovato." ;;
+    esac
+  fi
+}
+
+quelo_manual_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_manual_show() {
+  local choice="$1" base file lang title
+
+  ((choice >= 1 && choice <= 10)) || return 1
+  base="${MANUAL_FILES[$((choice - 1))]}"
+  lang="$(quelo_manual_lang)"
+  file="${DOC_DIR}/${base}.${lang}.txt"
+  [[ -f "${file}" ]] || file="${DOC_DIR}/${base}.it.txt"
+  [[ -f "${file}" ]] || { quelo_manual_ttyln "  $(quelo_manual_t missing)"; sleep 2; return 1; }
+  title="$(quelo_manual_t "op${choice}")"
+  quelo_pager_show "${file}" "${title}" "quelo-manual-${base}"
+}
+
+quelo_manual_menu() {
+  local choice key i
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+
+  while true; do
+    quelo_manual_ui_reset
+    quelo_manual_ttyln "=================================="
+    quelo_manual_ttyln "${C_GREEN_BOLD}      $(quelo_manual_t title)${C_RESET}"
+    quelo_manual_ttyln "=================================="
+    quelo_manual_ttyln ""
+    for i in $(seq 1 9); do
+      quelo_manual_ttyln "  ${C_GREEN}${i})${C_RESET} $(quelo_manual_t "op${i}")"
+    done
+    quelo_manual_ttyln "  ${C_GREEN}0)${C_RESET} $(quelo_manual_t op10)"
+    quelo_manual_ttyln ""
+    quelo_manual_ttyln "${C_AMBER}  $(quelo_manual_t help)${C_RESET}"
+    printf "${C_AMBER}  %s${C_RESET}" "$(quelo_manual_t prompt)" >/dev/tty 2>/dev/null
+    if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+      return 0
+    fi
+    [[ "${key}" == [qQ] ]] && { printf '\n' >/dev/tty 2>/dev/null; return 0; }
+    printf '\n' >/dev/tty 2>/dev/null
+    choice="${key}"
+    case "${choice}" in
+      [1-9]) quelo_manual_show "${choice}" ;;
+      0) quelo_manual_show 10 ;;
+      *) quelo_manual_ttyln "  $(quelo_manual_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+quelo_manual_menu

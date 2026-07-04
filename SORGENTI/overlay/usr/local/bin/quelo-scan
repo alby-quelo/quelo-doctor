@@ -1,0 +1,543 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+SCAN_LOG_LINES=()
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-fs.sh"
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-scan-defs.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER_BOLD=$'\033[1;33m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+DISK_DEVS=()
+DISK_SIZES=()
+DISK_MODELS=()
+DISK_VENDORS=()
+DISK_TRANS=()
+DISK_CHOICE=""
+DEST_DEVS=()
+DEST_MOUNTS=()
+DEST_FREE=()
+SCAN_ENGINE_LOADED=0
+
+quelo_scan_tty() {
+  printf '%b' "$*" >/dev/tty 2>/dev/null || printf '%b' "$*"
+}
+
+quelo_scan_ttyln() {
+  quelo_scan_tty "$*"
+  quelo_scan_tty $'\n'
+}
+
+quelo_scan_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_scan_t() {
+  if quelo_scan_ui_is_en; then
+    case "$1" in
+      title)           echo "CHECK INFECTIONS / CURE PC" ;;
+      step_disk)       echo "Choose disk to scan" ;;
+      step_ops)        echo "Scan operations" ;;
+      step_action)     echo "Action on threats" ;;
+      step_quar)       echo "Quarantine / log destination (writable)" ;;
+      no_disks)        echo "No disks found." ;;
+      select_help)     echo "Number=choice | Q=back" ;;
+      prompt)          echo "Choice: " ;;
+      invalid)         echo "Invalid choice." ;;
+      unknown)         echo "N/A" ;;
+      note_offline)    echo "Disk is powered off: process scan = autostart, tasks, files (not live Task Manager)." ;;
+      net_ok)          echo "Network OK — definitions can be updated (menu N)." ;;
+      net_bad)         echo "No network — only local definitions; connect via menu N if possible." ;;
+      defs_local)      echo "Local definitions:" ;;
+      defs_update)     echo "Updating definitions..." ;;
+      defs_updated)    echo "Definitions updated." ;;
+      defs_uptodate)   echo "Definitions already up to date." ;;
+      defs_offline)    echo "Offline: using ISO definitions only." ;;
+      defs_fail)       echo "Definition update failed — using local copy." ;;
+      op_full)         echo "Full scan (all engines)" ;;
+      op_malware)      echo "Viruses and malware (ClamAV)" ;;
+      op_persist)      echo "Persistence and autostart" ;;
+      op_adware)       echo "Adware / PUA / browser extensions" ;;
+      op_rootkit)      echo "Rootkit (Linux partitions only)" ;;
+      op_defs)         echo "Update definitions only" ;;
+      act_report)      echo "Report only (no changes)" ;;
+      act_auto)        echo "Automatic quarantine" ;;
+      act_ask)         echo "Ask for each threat (quarantine/delete/skip)" ;;
+      mounted)         echo "mounted" ;;
+      not_mounted)     echo "not mounted" ;;
+      press_key)       echo "Press a key to continue..." ;;
+      summary_title)   echo "SCAN COMPLETED" ;;
+      stat_infected)   echo "Infected files" ;;
+      stat_quarantine) echo "Quarantined" ;;
+      stat_deleted)    echo "Deleted" ;;
+      stat_repaired)   echo "Repaired" ;;
+      stat_failed)     echo "Actions not possible" ;;
+      stat_duration)   echo "Duration" ;;
+      save_log_prompt) echo "Save log .txt to USB/folder? [y/n]: " ;;
+      save_log_ok)     echo "Log saved: %s" ;;
+      save_log_fail)   echo "Could not save log." ;;
+      no_dest)         echo "No writable destination found." ;;
+      scanning)        echo "Scanning..." ;;
+      yara_rules)      echo "YARA rules" ;;
+    esac
+  else
+    case "$1" in
+      title)           echo "CONTROLLA INFEZIONI E CURA PC" ;;
+      step_disk)       echo "Scegli disco da analizzare" ;;
+      step_ops)        echo "Operazioni scansione" ;;
+      step_action)     echo "Azione sulle minacce" ;;
+      step_quar)       echo "Destinazione quarantena/log (scrivibile)" ;;
+      no_disks)        echo "Nessun disco trovato." ;;
+      select_help)     echo "Numero=scelta | Q=indietro" ;;
+      prompt)          echo "Scelta: " ;;
+      invalid)         echo "Scelta non valida." ;;
+      unknown)         echo "N/D" ;;
+      note_offline)    echo "Disco spento: i processi attivi non sono visibili; si analizzano file, autostart e persistenza." ;;
+      net_ok)          echo "Rete OK — definizioni aggiornabili (menu N)." ;;
+      net_bad)         echo "Senza rete — solo definizioni locali; se possibile connettersi dal menu N." ;;
+      defs_local)      echo "Definizioni locali:" ;;
+      defs_update)     echo "Aggiornamento definizioni..." ;;
+      defs_updated)    echo "Definizioni aggiornate." ;;
+      defs_uptodate)   echo "Definizioni gia aggiornate." ;;
+      defs_offline)    echo "Offline: uso definizioni presenti nell'ISO." ;;
+      defs_fail)       echo "Aggiornamento non riuscito — uso copia locale." ;;
+      op_full)         echo "Scansione completa (tutti i motori)" ;;
+      op_malware)      echo "Virus e malware (ClamAV)" ;;
+      op_persist)      echo "Persistenza e avvio automatico" ;;
+      op_adware)       echo "Adware / PUA / estensioni browser" ;;
+      op_rootkit)      echo "Rootkit (solo partizioni Linux)" ;;
+      op_defs)         echo "Aggiorna solo definizioni" ;;
+      act_report)      echo "Solo report (nessuna modifica)" ;;
+      act_auto)        echo "Quarantena automatica" ;;
+      act_ask)         echo "Chiedi per ogni minaccia (quarantena/cancella/salta)" ;;
+      mounted)         echo "montata" ;;
+      not_mounted)     echo "non montata" ;;
+      press_key)       echo "Premi un tasto per continuare..." ;;
+      summary_title)   echo "SCANSIONE COMPLETATA" ;;
+      stat_infected)   echo "File infetti" ;;
+      stat_quarantine) echo "Messi in quarantena" ;;
+      stat_deleted)    echo "Cancellati" ;;
+      stat_repaired)   echo "Riparati" ;;
+      stat_failed)     echo "Azioni non possibili" ;;
+      stat_duration)   echo "Durata" ;;
+      save_log_prompt) echo "Salvare log .txt su chiavetta/cartella? [s/n]: " ;;
+      save_log_ok)     echo "Log salvato: %s" ;;
+      save_log_fail)   echo "Salvataggio log non riuscito." ;;
+      no_dest)         echo "Nessuna destinazione scrivibile trovata." ;;
+      scanning)        echo "Scansione in corso..." ;;
+      yara_rules)      echo "Regole YARA" ;;
+    esac
+  fi
+}
+
+quelo_scan_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  if command -v tput >/dev/null 2>&1; then
+    tput reset >/dev/tty 2>/dev/null || true
+  fi
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_scan_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+}
+
+quelo_scan_confirm_yn() {
+  local reply
+
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  quelo_scan_tty $'\n'
+  if quelo_scan_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_scan_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  if [[ "${key}" == [qQ] ]]; then
+    quelo_scan_tty $'\n'
+    return 1
+  fi
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key </dev/tty 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { quelo_scan_tty $'\n'; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+  quelo_scan_tty $'\n'
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_scan_load_engine() {
+  ((SCAN_ENGINE_LOADED)) && return 0
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-scan-engine.sh" || return 1
+  SCAN_ENGINE_LOADED=1
+  return 0
+}
+
+quelo_scan_collect_disks() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev dev dtype size model vendor tran
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* || "${dev}" == /dev/sr* || "${dev}" == /dev/loop* || "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    DISK_MODELS+=("${model:-$(quelo_scan_t unknown)}")
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_scan_model_line() {
+  local idx="$1"
+  if [[ -n "${DISK_VENDORS[$idx]}" && "${DISK_VENDORS[$idx]}" != "${DISK_MODELS[$idx]}" ]]; then
+    echo "${DISK_VENDORS[$idx]} ${DISK_MODELS[$idx]}"
+  else
+    echo "${DISK_MODELS[$idx]}"
+  fi
+}
+
+quelo_scan_show_network_banner() {
+  local info ver date ycnt
+
+  quelo_scan_ttyln ""
+  if quelo_scan_has_network; then
+    quelo_scan_ttyln "${C_GREEN}  $(quelo_scan_t net_ok)${C_RESET}"
+  else
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t net_bad)${C_RESET}"
+  fi
+  info="$(quelo_scan_defs_clam_info)"
+  ver="${info%%|*}"
+  date="${info#*|}"
+  ycnt="$(quelo_scan_defs_yara_count)"
+  quelo_scan_ttyln "  $(quelo_scan_t defs_local) ClamAV ${ver} (${date}) | $(quelo_scan_t yara_rules): ${ycnt}"
+  quelo_scan_ttyln "  $(quelo_scan_t note_offline)"
+  quelo_scan_ttyln ""
+}
+
+quelo_scan_update_definitions() {
+  local rc
+
+  quelo_scan_ttyln "  $(quelo_scan_t defs_update)"
+  quelo_scan_defs_update
+  rc=$?
+  case "${rc}" in
+    0) quelo_scan_ttyln "  $(quelo_scan_t defs_updated)" ;;
+    2) quelo_scan_ttyln "  $(quelo_scan_t defs_offline)" ;;
+    *) quelo_scan_ttyln "  $(quelo_scan_t defs_fail)" ;;
+  esac
+  sleep 1
+}
+
+quelo_scan_pick_action_mode() {
+  local choice
+
+  while true; do
+    quelo_scan_ttyln ""
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t step_action)${C_RESET}"
+    quelo_scan_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_scan_t act_report)"
+    quelo_scan_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_scan_t act_auto)"
+    quelo_scan_ttyln "  ${C_GREEN}3)${C_RESET} $(quelo_scan_t act_ask)"
+    quelo_scan_ttyln ""
+    quelo_scan_tty "${C_AMBER}  $(quelo_scan_t prompt)${C_RESET}"
+    quelo_scan_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    case "${choice}" in
+      1) SCAN_MODE="report"; return 0 ;;
+      2) SCAN_MODE="auto"; return 0 ;;
+      3) SCAN_MODE="ask"; return 0 ;;
+      *) quelo_scan_ttyln "  $(quelo_scan_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+quelo_scan_collect_writable_dests() {
+  local live_dev disk part size fstype mp avail
+
+  DEST_DEVS=()
+  DEST_MOUNTS=()
+  DEST_FREE=()
+
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r disk; do
+    [[ -n "${disk}" ]] || continue
+    while IFS= read -r part; do
+      [[ -n "${part}" ]] || continue
+      quelo_live_is_medium_partition "${part}" && continue
+      [[ -n "${live_dev}" && "$(quelo_partition_disk "${part}")" == "${live_dev}" ]] && continue
+      fstype="$(quelo_fs_normalize_type "$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)")"
+      [[ -z "${fstype}" || "${fstype}" == "swap" ]] && continue
+      mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+      if [[ -z "${mp}" ]]; then
+        mp="$(/usr/local/bin/quelo-automount mount "${part##*/}" 2>/dev/null)" || mp=""
+      fi
+      [[ -n "${mp}" && -d "${mp}" && -w "${mp}" ]] || continue
+      avail="$(df -B1 --output=avail "${mp}" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+      DEST_DEVS+=("${part}")
+      DEST_MOUNTS+=("${mp}")
+      DEST_FREE+=("${avail:-0}")
+    done < <(quelo_disk_enum_partitions "${disk}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_scan_pick_log_dest() {
+  local i num choice idx
+
+  DEST_DEVS=()
+  DEST_MOUNTS=()
+  DEST_FREE=()
+  quelo_scan_collect_writable_dests
+
+  if ((${#DEST_MOUNTS[@]} == 0)); then
+    quelo_scan_ttyln "  $(quelo_scan_t no_dest)"
+    return 1
+  fi
+
+  quelo_scan_ttyln ""
+  quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t step_quar)${C_RESET}"
+  for i in "${!DEST_MOUNTS[@]}"; do
+    num=$((i + 1))
+    quelo_scan_ttyln "  ${C_GREEN}${num})${C_RESET} ${DEST_DEVS[$i]}  ${DEST_MOUNTS[$i]}"
+  done
+  quelo_scan_ttyln ""
+  quelo_scan_tty "${C_AMBER}  $(quelo_scan_t prompt)${C_RESET}"
+  quelo_scan_read_choice || return 1
+  choice="${DISK_CHOICE}"
+  [[ "${choice}" =~ ^[0-9]+$ ]] || return 1
+  idx=$((choice - 1))
+  ((idx >= 0 && idx < ${#DEST_MOUNTS[@]})) || return 1
+  printf '%s\n' "${DEST_MOUNTS[$idx]}"
+}
+
+quelo_scan_setup_session() {
+  local disk="$1" ts
+
+  SCAN_DISK="${disk}"
+  SCAN_STAT_INFECTED=0
+  SCAN_STAT_QUARANTINE=0
+  SCAN_STAT_DELETED=0
+  SCAN_STAT_REPAIRED=0
+  SCAN_STAT_FAILED=0
+  SCAN_START_TS=$(date +%s)
+  ts="$(date +%Y%m%d-%H%M%S)"
+  SCAN_LOG_FILE="/tmp/quelo-scan-${disk##*/}-${ts}.log"
+  : >"${SCAN_LOG_FILE}"
+  SCAN_LOG_LINES=()
+  quelo_scan_log "SESSION disk=${disk} mode=${SCAN_MODE}"
+}
+
+quelo_scan_prepare_quarantine() {
+  local dest ts
+
+  if [[ "${SCAN_MODE}" == "report" ]]; then
+    SCAN_QUAR_ROOT=""
+    return 0
+  fi
+
+  dest="$(quelo_scan_pick_log_dest)" || return 1
+  ts="$(date +%Y%m%d-%H%M%S)"
+  SCAN_QUAR_ROOT="${dest}/quelo-quarantine/${SCAN_DISK##*/}-${ts}"
+  mkdir -p "${SCAN_QUAR_ROOT}/files" "${SCAN_QUAR_ROOT}/meta" 2>/dev/null || return 1
+  quelo_scan_log "QUAR-ROOT ${SCAN_QUAR_ROOT}"
+  return 0
+}
+
+quelo_scan_run_op() {
+  local op="$1" disk="$2"
+
+  quelo_scan_load_engine || return 1
+  quelo_scan_pick_action_mode || return 0
+
+  if [[ "${SCAN_MODE}" != "report" ]]; then
+    quelo_scan_prepare_quarantine || {
+      quelo_scan_ttyln "  $(quelo_scan_t no_dest)"
+      quelo_scan_pause
+      return 1
+    }
+  fi
+
+  quelo_scan_update_definitions
+  quelo_scan_setup_session "${disk}"
+
+  quelo_scan_ui_reset
+  quelo_scan_ttyln "=================================="
+  quelo_scan_ttyln "${C_GREEN_BOLD}      $(quelo_scan_t title)${C_RESET}"
+  quelo_scan_ttyln "=================================="
+  quelo_scan_ttyln ""
+  quelo_scan_ttyln "  ${disk} — $(quelo_scan_t scanning)"
+  quelo_scan_ttyln ""
+
+  quelo_scan_mount_disk "${disk}"
+  if ((${#SCAN_MOUNTS[@]} == 0)); then
+    quelo_scan_ttyln "  $(quelo_scan_t no_dest)"
+    quelo_scan_pause
+    return 1
+  fi
+
+  quelo_scan_remount_rw_if_needed
+  quelo_scan_count_files
+  quelo_scan_progress 5 0 "${SCAN_FILE_TOTAL}" "prepare"
+
+  case "${op}" in
+    full)
+      quelo_scan_run_full
+      ;;
+    malware)
+      quelo_scan_run_clamav
+      ;;
+    persist)
+      # shellcheck disable=SC1091
+      . "${Q_BIN}/quelo-scan-persist.sh"
+      quelo_scan_persist_run "persist"
+      ;;
+    adware)
+      # shellcheck disable=SC1091
+      . "${Q_BIN}/quelo-scan-persist.sh"
+      quelo_scan_persist_scan_roots "browser"
+      quelo_scan_run_yara
+      ;;
+    rootkit)
+      quelo_scan_run_rootkit
+      ;;
+    defs)
+      quelo_scan_unmount_all
+      return 0
+      ;;
+  esac
+
+  quelo_scan_unmount_all
+  quelo_scan_progress 100 "${SCAN_FILE_DONE}" "${SCAN_FILE_TOTAL}" "done"
+  quelo_scan_progress_end
+  quelo_scan_show_summary
+  quelo_scan_save_log_prompt
+  quelo_scan_ttyln ""
+  quelo_scan_ttyln "  $(quelo_scan_t press_key)"
+  quelo_scan_pause
+}
+
+quelo_scan_pick_disk() {
+  local i num choice idx
+
+  while true; do
+    quelo_scan_collect_disks
+    quelo_scan_ui_reset
+    quelo_scan_ttyln "=================================="
+    quelo_scan_ttyln "${C_GREEN_BOLD}      $(quelo_scan_t title)${C_RESET}"
+    quelo_scan_ttyln "=================================="
+    quelo_scan_ttyln ""
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t step_disk)${C_RESET}"
+    quelo_scan_ttyln ""
+
+    if ((${#DISK_DEVS[@]} == 0)); then
+      quelo_scan_ttyln "  $(quelo_scan_t no_disks)"
+      quelo_scan_pause
+      return 1
+    fi
+
+    for i in "${!DISK_DEVS[@]}"; do
+      num=$((i + 1))
+      quelo_scan_ttyln "  ${C_GREEN}${num})${C_RESET} ${DISK_DEVS[$i]}  ${DISK_SIZES[$i]}  $(quelo_scan_model_line "${i}")"
+    done
+    quelo_scan_ttyln ""
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t select_help)${C_RESET}"
+    quelo_scan_tty "${C_AMBER}  $(quelo_scan_t prompt)${C_RESET}"
+    quelo_scan_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_scan_ttyln "  $(quelo_scan_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#DISK_DEVS[@]})) || { quelo_scan_ttyln "  $(quelo_scan_t invalid)"; sleep 1; continue; }
+    printf '%s\n' "${DISK_DEVS[$idx]}"
+    return 0
+  done
+}
+
+quelo_scan_ops_menu() {
+  local disk="$1" choice
+
+  while true; do
+    quelo_scan_ui_reset
+    quelo_scan_ttyln "=================================="
+    quelo_scan_ttyln "${C_GREEN_BOLD}      $(quelo_scan_t title)${C_RESET}"
+    quelo_scan_ttyln "=================================="
+    quelo_scan_ttyln ""
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t step_ops) — ${disk}${C_RESET}"
+    quelo_scan_show_network_banner
+    quelo_scan_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_scan_t op_full)"
+    quelo_scan_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_scan_t op_malware)"
+    quelo_scan_ttyln "  ${C_GREEN}3)${C_RESET} $(quelo_scan_t op_persist)"
+    quelo_scan_ttyln "  ${C_GREEN}4)${C_RESET} $(quelo_scan_t op_adware)"
+    quelo_scan_ttyln "  ${C_GREEN}5)${C_RESET} $(quelo_scan_t op_rootkit)"
+    quelo_scan_ttyln "  ${C_GREEN}6)${C_RESET} $(quelo_scan_t op_defs)"
+    quelo_scan_ttyln ""
+    quelo_scan_ttyln "${C_AMBER}  $(quelo_scan_t select_help)${C_RESET}"
+    quelo_scan_tty "${C_AMBER}  $(quelo_scan_t prompt)${C_RESET}"
+    quelo_scan_read_choice || return 0
+    choice="${DISK_CHOICE}"
+
+    case "${choice}" in
+      1) quelo_scan_run_op full "${disk}" ;;
+      2) quelo_scan_run_op malware "${disk}" ;;
+      3) quelo_scan_run_op persist "${disk}" ;;
+      4) quelo_scan_run_op adware "${disk}" ;;
+      5) quelo_scan_run_op rootkit "${disk}" ;;
+      6) quelo_scan_update_definitions; quelo_scan_ttyln ""; quelo_scan_ttyln "  $(quelo_scan_t press_key)"; quelo_scan_pause ;;
+      *) quelo_scan_ttyln "  $(quelo_scan_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+quelo_scan_menu() {
+  local disk
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+  quelo_scan_ui_reset
+
+  while true; do
+    disk="$(quelo_scan_pick_disk)" || return 0
+    quelo_scan_ops_menu "${disk}"
+  done
+}
+
+quelo_scan_menu

@@ -1,0 +1,9 @@
+L — SCEGLI LOCALE
+══════════════════════════════════════════════════════════════
+Imposta lingua a schermo (IT/EN) e layout tastiera.
+Richiede riavvio menu per applicare tutte le etichette.
+
+N — CONFIGURA RETE
+══════════════════════════════════════════════════════════════
+Configurazione rete per aggiornamenti antivirus e uso generale.
+DHCP o impostazione manuale secondo wizard.

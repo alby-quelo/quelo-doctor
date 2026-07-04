@@ -1,0 +1,418 @@
+#!/bin/bash
+# Automount leggero per partizioni (anche USB a caldo) in /media/<etichetta>.
+
+set -o pipefail
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-fs.sh
+
+ACTION="${1:-}"
+PART="${2:-}"
+LOG_TAG="quelo-automount"
+MEDIA_ROOT="/media"
+STATE_DIR="/run/quelo-doctor/automount"
+SUPPRESS_DIR="/run/quelo-doctor/automount-suppress"
+
+quelo_automount_is_suppressed() {
+  [[ -f "${SUPPRESS_DIR}/${1##*/}" ]]
+}
+
+quelo_automount_suppress() {
+  mkdir -p "${SUPPRESS_DIR}"
+  : >"${SUPPRESS_DIR}/${1##*/}"
+}
+
+quelo_automount_unsuppress() {
+  rm -f "${SUPPRESS_DIR}/${1##*/}"
+}
+
+quelo_automount_log() {
+  logger -t "${LOG_TAG}" "$*"
+}
+
+quelo_automount_ensure_fuse() {
+  if [[ -c /dev/fuse ]]; then
+    return 0
+  fi
+  if command -v modprobe >/dev/null 2>&1; then
+    modprobe fuse 2>/dev/null || true
+  fi
+  if [[ -c /dev/fuse ]]; then
+    return 0
+  fi
+  quelo_automount_log "FUSE non disponibile (/dev/fuse assente): fallback solo ntfs-3g"
+  return 1
+}
+
+quelo_automount_ensure_ntfs3() {
+  if command -v modprobe >/dev/null 2>&1; then
+    modprobe ntfs3 2>/dev/null || true
+  fi
+}
+
+quelo_automount_live_disk() {
+  quelo_live_disk
+}
+
+quelo_automount_disk_of() {
+  local dev="$1"
+  local pk
+
+  pk="$(lsblk -no PKNAME "${dev}" 2>/dev/null)" || true
+  if [[ -n "${pk}" ]]; then
+    echo "/dev/${pk}"
+    return 0
+  fi
+  echo "${dev}"
+}
+
+quelo_automount_should_skip() {
+  local dev="$1"
+  local disk live fstype mountpoint
+
+  [[ -b "${dev}" ]] || return 0
+
+  quelo_live_is_medium_partition "${dev}" && return 0
+  quelo_live_is_on_disk "${dev}" && return 0
+
+  disk="$(quelo_automount_disk_of "${dev}")"
+  if live="$(quelo_automount_live_disk)"; then
+    [[ "${disk}" == "${live}" ]] && return 0
+  fi
+
+  fstype="$(quelo_fs_detect "${dev}")" || fstype=""
+  quelo_fs_should_skip_mount "${fstype}" && return 0
+
+  return 1
+}
+
+quelo_automount_is_mounted() {
+  local dev="$1"
+  local mountpoint
+  mountpoint="$(findmnt -n -o TARGET "${dev}" 2>/dev/null)" || mountpoint=""
+  [[ -n "${mountpoint}" ]]
+}
+
+quelo_automount_should_skip_automount() {
+  local dev="$1"
+  quelo_automount_is_suppressed "${dev}" && return 0
+  quelo_automount_should_skip "${dev}" && return 0
+  quelo_automount_is_mounted "${dev}" && return 0
+  return 1
+}
+
+quelo_automount_sanitize_name() {
+  local s="$1"
+  s="${s//$'\r'/}"
+  s="${s// /_}"
+  s="$(echo "${s}" | tr -cd '[:alnum:]._+-' )"
+  echo "${s:0:48}"
+}
+
+quelo_automount_filesystem_label() {
+  local dev="$1" fstype="$2" label
+
+  case "${fstype}" in
+    ntfs|ntfs-3g)
+      command -v ntfslabel >/dev/null 2>&1 || return 1
+      label="$(ntfslabel "${dev}" 2>/dev/null | head -1)"
+      ;;
+    exfat)
+      command -v exfatlabel >/dev/null 2>&1 || return 1
+      label="$(exfatlabel "${dev}" 2>/dev/null | head -1)"
+      ;;
+    vfat|msdos)
+      command -v fatlabel >/dev/null 2>&1 || return 1
+      label="$(fatlabel "${dev}" 2>/dev/null | head -1)"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  label="$(quelo_automount_sanitize_name "${label}")"
+  [[ -n "${label}" ]] && echo "${label}"
+}
+
+quelo_automount_parttype_name() {
+  local dev="$1" pt
+
+  pt="$(lsblk -no PARTTYPENAME "${dev}" 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+  case "${pt}" in
+    *efi*) echo "EFI" ;;
+    *microsoft*reserved*) echo "MSR" ;;
+    *microsoft*basic*) echo "Windows" ;;
+    *linux*swap*) echo "Swap" ;;
+    *linux*home*) echo "Home" ;;
+    *linux*) echo "Linux" ;;
+    *) return 1 ;;
+  esac
+}
+
+quelo_automount_fstype_name() {
+  case "$1" in
+    ntfs|ntfs-3g) echo "NTFS" ;;
+    ext4|ext3) echo "Linux-ext4" ;;
+    btrfs) echo "Btrfs" ;;
+    xfs) echo "XFS" ;;
+    vfat|msdos) echo "EFI" ;;
+    exfat) echo "exFAT" ;;
+    *) echo "${1}" ;;
+  esac
+}
+
+quelo_automount_base_name() {
+  local dev="$1"
+  local fstype label partlabel base suffix="${dev##*/}"
+
+  fstype="$(quelo_fs_detect "${dev}")" || fstype=""
+
+  label="$(blkid -o value -s LABEL "${dev}" 2>/dev/null)" || label=""
+  label="$(quelo_automount_sanitize_name "${label}")"
+  if [[ -n "${label}" ]]; then
+    echo "${label}"
+    return 0
+  fi
+
+  partlabel="$(lsblk -no PARTLABEL "${dev}" 2>/dev/null)" || partlabel=""
+  partlabel="$(quelo_automount_sanitize_name "${partlabel}")"
+  if [[ -n "${partlabel}" ]]; then
+    echo "${partlabel}"
+    return 0
+  fi
+
+  label="$(quelo_automount_filesystem_label "${dev}" "${fstype}" 2>/dev/null)" || label=""
+  if [[ -n "${label}" ]]; then
+    echo "${label}"
+    return 0
+  fi
+
+  if base="$(quelo_automount_parttype_name "${dev}" 2>/dev/null)"; then
+    echo "${base}-${suffix}"
+    return 0
+  fi
+
+  echo "$(quelo_automount_fstype_name "${fstype}")-${suffix}"
+}
+
+quelo_automount_mount_dir() {
+  local dev="$1"
+  local base name
+
+  base="$(quelo_automount_base_name "${dev}")"
+  name="${MEDIA_ROOT}/${base}"
+  if [[ -e "${name}" ]] && ! mountpoint -q "${name}" 2>/dev/null; then
+    name="${MEDIA_ROOT}/${base}-${dev##*/}"
+  fi
+  echo "${name}"
+}
+
+quelo_automount_clean_stale_dirs() {
+  local mp
+  for mp in "${MEDIA_ROOT}"/*; do
+    [[ -d "${mp}" ]] || continue
+    mountpoint -q "${mp}" 2>/dev/null && continue
+    rmdir "${mp}" 2>/dev/null || true
+  done
+}
+
+quelo_automount_mount_ntfs() {
+  local dev="$1" target="$2" part="$3"
+  local opts err
+
+  quelo_automount_ensure_ntfs3
+
+  # Come mount manuale su Debian: prima driver kernel ntfs3 (no FUSE).
+  opts="rw,uid=0,gid=0,umask=022"
+  if mount -o "${opts}" "${dev}" "${target}" 2>/dev/null \
+    || mount -t ntfs3 -o "${opts}" "${dev}" "${target}" 2>/dev/null; then
+    rm -f "${STATE_DIR}/${part}.hibernated-ro"
+    quelo_automount_log "mounted ${dev} via kernel ntfs3 on ${target}"
+    return 0
+  fi
+
+  # Fallback ntfs-3g (serve per ibernazione Windows e remove_hiberfile).
+  quelo_automount_ensure_fuse || true
+  if command -v ntfs-3g.probe >/dev/null 2>&1; then
+    if ! ntfs-3g.probe --readonly "${dev}" >/dev/null 2>&1; then
+      quelo_automount_log "ntfs-3g.probe warning on ${dev}, provo comunque ntfs-3g"
+    fi
+  fi
+
+  opts="rw,recover,uid=0,gid=0,umask=022"
+  if mount -t ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null \
+    || ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null; then
+    rm -f "${STATE_DIR}/${part}.hibernated-ro"
+    quelo_automount_log "mounted ${dev} via ntfs-3g rw on ${target}"
+    return 0
+  fi
+
+  opts="ro,uid=0,gid=0,umask=022"
+  if mount -t ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null \
+    || ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null; then
+    echo "1" >"${STATE_DIR}/${part}.hibernated-ro"
+    quelo_automount_log "mounted ${dev} read-only via ntfs-3g (Windows hibernation?)"
+    return 0
+  fi
+
+  err="$(mount -o rw "${dev}" "${target}" 2>&1)" || true
+  quelo_automount_log "NTFS mount failed ${dev}: ${err:-unknown error}"
+  return 1
+}
+
+quelo_automount_add() {
+  local dev="$1"
+  local manual="${2:-0}"
+  local fstype opts target part
+
+  if [[ "${manual}" == 1 ]]; then
+    quelo_automount_should_skip "${dev}" && return 0
+    quelo_automount_unsuppress "${dev}"
+  else
+    quelo_automount_should_skip_automount "${dev}" && return 0
+  fi
+
+  fstype="$(quelo_fs_detect "${dev}")" || fstype=""
+  if [[ -z "${fstype}" ]] && quelo_fs_is_ntfs "${dev}"; then
+    fstype="ntfs"
+  fi
+  [[ -n "${fstype}" ]] || return 0
+
+  target="$(quelo_automount_mount_dir "${dev}")"
+  mkdir -p "${target}" "${STATE_DIR}"
+  part="${dev##*/}"
+
+  case "${fstype}" in
+    ntfs)
+      quelo_automount_mount_ntfs "${dev}" "${target}" "${part}" || true
+      ;;
+    exfat|vfat|msdos)
+      opts="rw,uid=0,gid=0,umask=000"
+      mount -o "${opts}" "${dev}" "${target}" || true
+      ;;
+    *)
+      mount -o "rw" "${dev}" "${target}" || true
+      ;;
+  esac
+
+  if mountpoint -q "${target}" 2>/dev/null; then
+    echo "${target}" >"${STATE_DIR}/${part}"
+    quelo_automount_log "mounted ${dev} (${fstype}) on ${target}"
+    echo "${target}"
+    return 0
+  fi
+
+  rmdir "${target}" 2>/dev/null || true
+  quelo_automount_log "mount failed ${dev} (${fstype})"
+  return 1
+}
+
+quelo_automount_remove() {
+  local dev="$1"
+  local target part
+
+  part="${dev##*/}"
+  target=""
+  [[ -f "${STATE_DIR}/${part}" ]] && target="$(<"${STATE_DIR}/${part}")"
+  [[ -z "${target}" ]] && target="$(findmnt -n -o TARGET "${dev}" 2>/dev/null)" || true
+  [[ -n "${target}" && "${target}" == "${MEDIA_ROOT}"/* ]] || return 0
+
+  umount -l "${target}" 2>/dev/null || umount "${target}" 2>/dev/null || true
+  rmdir "${target}" 2>/dev/null || true
+  rm -f "${STATE_DIR}/${part}" "${STATE_DIR}/${part}.hibernated-ro"
+  quelo_automount_suppress "${dev}"
+  quelo_automount_log "unmounted ${dev} from ${target}"
+  quelo_automount_clean_stale_dirs
+}
+
+quelo_automount_boot() {
+  local part
+
+  mkdir -p "${MEDIA_ROOT}" "${STATE_DIR}"
+  quelo_automount_ensure_ntfs3
+  quelo_automount_ensure_fuse || true
+  quelo_automount_clean_stale_dirs
+  if [[ -w /proc/sys/kernel/printk ]]; then
+    echo '1 4 1 1' >/proc/sys/kernel/printk
+  fi
+  if command -v setterm >/dev/null 2>&1 && [[ -c /dev/tty1 ]]; then
+    setterm -msg off </dev/tty1 >/dev/tty1 2>/dev/null || true
+  fi
+  while IFS= read -r part; do
+    [[ -z "${part}" ]] || continue
+    part="$(quelo_lsblk_clean_name "${part}")"
+    [[ -b "${part}" ]] || continue
+    quelo_automount_add "${part}"
+  done < <(lsblk -ln -p -o NAME,TYPE 2>/dev/null | awk '$2=="part" {print $1}')
+}
+
+quelo_automount_force_ntfs() {
+  local dev="$1"
+  local fstype target opts mp part disk live
+
+  [[ -b "${dev}" ]] || return 1
+
+  quelo_automount_ensure_fuse || return 1
+
+  fstype="$(quelo_fs_detect "${dev}")" || return 1
+  [[ "${fstype}" == "ntfs" ]] || return 1
+
+  disk="$(quelo_automount_disk_of "${dev}")"
+  if live="$(quelo_automount_live_disk)"; then
+    [[ "${disk}" == "${live}" ]] && return 1
+  fi
+
+  mp="$(findmnt -n -o TARGET "${dev}" 2>/dev/null)" || mp=""
+  if [[ -n "${mp}" ]]; then
+    umount -l "${mp}" 2>/dev/null || umount "${mp}" 2>/dev/null || return 1
+    rmdir "${mp}" 2>/dev/null || true
+    rm -f "${STATE_DIR}/${dev##*/}"
+  fi
+
+  target="$(quelo_automount_mount_dir "${dev}")"
+  mkdir -p "${target}" "${STATE_DIR}"
+  opts="rw,remove_hiberfile,recover,uid=0,gid=0,umask=022"
+
+  if ! mount -t ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null; then
+    if ! ntfs-3g -o "${opts}" "${dev}" "${target}" 2>/dev/null; then
+      rmdir "${target}" 2>/dev/null || true
+      return 1
+    fi
+  fi
+
+  if ! mountpoint -q "${target}" 2>/dev/null; then
+    rmdir "${target}" 2>/dev/null || true
+    return 1
+  fi
+
+  part="${dev##*/}"
+  echo "${target}" >"${STATE_DIR}/${part}"
+  rm -f "${STATE_DIR}/${part}.hibernated-ro"
+  quelo_automount_log "force-mounted ${dev} on ${target} (remove_hiberfile)"
+  echo "${target}"
+  return 0
+}
+
+case "${ACTION}" in
+  add)
+    [[ -n "${PART}" ]] || exit 0
+    quelo_automount_add "/dev/${PART}" >/dev/null 2>&1 || true
+    ;;
+  mount)
+    [[ -n "${PART}" ]] || exit 1
+    quelo_automount_add "/dev/${PART}" 1 || exit 1
+    ;;
+  remove)
+    [[ -n "${PART}" ]] || exit 0
+    quelo_automount_remove "/dev/${PART}" >/dev/null 2>&1 || true
+    ;;
+  force-ntfs)
+    [[ -n "${PART}" ]] || exit 1
+    quelo_automount_force_ntfs "/dev/${PART}" || exit 1
+    ;;
+  boot)
+    quelo_automount_boot
+    ;;
+  *)
+    exit 0
+    ;;
+esac

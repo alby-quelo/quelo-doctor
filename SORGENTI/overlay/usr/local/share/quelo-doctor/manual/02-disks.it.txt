@@ -1,0 +1,16 @@
+2 — CONTROLLO DISCHI
+══════════════════════════════════════════════════════════════
+Flusso: scegli disco → operazioni.
+
+Funzioni principali
+  - Informazioni disco e SMART
+  - Elenco partizioni
+  - Controllo filesystem (fsck)
+  - Tasto D = operazioni tabella disco (parted)
+
+Tasti utili nel sottomenu partizioni
+  X = elimina partizione (doppia conferma)
+  W = formatta
+  N = nuova partizione
+
+Il disco della live USB è escluso dall'elenco.

@@ -1,0 +1,59 @@
+LICENZE — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+SISTEMA OPERATIVO — DEBIAN
+──────────────────────────────────────────────────────────────
+Quelo Doctor è basato su Debian GNU/Linux (sid/unstable per la build).
+Il sistema operativo e i pacchetti Debian seguono la Debian Free
+Software Guidelines (DFSG) e le condizioni di ciascun pacchetto
+(/usr/share/doc/<pacchetto>/copyright).
+
+Riferimenti:
+  https://www.debian.org/social_contract
+  https://www.debian.org/social_contract#guidelines
+
+──────────────────────────────────────────────────────────────
+SOFTWARE DI TERZE PARTI (riepilogo licenze principali)
+──────────────────────────────────────────────────────────────
+TestDisk / PhotoRec     → GPL
+Midnight Commander      → GPL
+ClamAV                  → GPL v2
+YARA                    → Apache License 2.0
+chkrootkit              → GPL / Artistic
+extundelete / ext4magic → GPL
+ntfs-3g                 → GPL
+GRUB                    → GPL v3
+ms-sys                  → GPL (sorgente SourceForge)
+chntpw                  → GPL
+cryptsetup              → GPL v2
+dislocker               → GPL v2
+smartmontools           → GPL
+NetworkManager          → GPL
+man-db                  → GPL v2+
+groff-base              → GPL v3+
+less                    → GPL v3+ (o BSD — vedi copyright)
+Firmware non-free       → licenze proprietarie dei produttori
+  (pacchetti in sezione non-free-firmware di Debian)
+
+Per il testo completo di ogni componente:
+  /usr/share/doc/NOME-PACCHETTO/copyright
+
+Regole YARA community: licenza per regola nel repository Yara-Rules
+  (in genere Apache 2.0 o CC — vedi file singolo in
+   /usr/local/share/quelo-scan/yara/)
+
+──────────────────────────────────────────────────────────────
+QUELO DOCTOR — PROGETTO AUTOPRODOTTO
+──────────────────────────────────────────────────────────────
+Menu, script, overlay, documentazione e branding originali
+Quelo Doctor:
+
+  Creative Commons Attribution-NonCommercial 4.0 International
+  (CC BY-NC 4.0)
+
+  https://creativecommons.org/licenses/by-nc/4.0/
+
+  Consentito: uso, modifica, condivisione con attribuzione.
+  Non consentito: uso commerciale senza autorizzazione.
+
+  Copyright progetto Quelo Doctor — contributori del progetto.

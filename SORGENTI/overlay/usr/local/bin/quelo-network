@@ -1,0 +1,723 @@
+#!/bin/bash
+# Configurazione rete (NetworkManager + dialog).
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-console-quiet.sh
+quelo_console_quiet_on
+
+# Fosfori CRT: verde e ambra (come live-menu)
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RESET=$'\033[0m'
+
+DLG_H=20
+DLG_W=72
+LETTERS=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+
+NET_DEVS=()
+NET_TYPES=()
+NET_STATES=()
+NET_SSIDS=()
+
+quelo_net_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_net_t() {
+  if quelo_net_is_en; then
+    case "$1" in
+      title)         echo "NETWORK SETUP" ;;
+      active_title)  echo "Active connection" ;;
+      active_none)   echo "No active connection." ;;
+      pick_iface)    echo "Choice (Q to exit): " ;;
+      ifaces_section) echo "Configure interfaces and connection" ;;
+      no_ifaces)     echo "No network interfaces found." ;;
+      invalid)       echo "Invalid choice." ;;
+      wifi_title)    echo "WiFi networks" ;;
+      wifi_scan)     echo "Scanning WiFi..." ;;
+      wifi_none)     echo "No networks found." ;;
+      wifi_pwd)      echo "Wi-Fi password" ;;
+      wifi_wps_hint) echo "Press the WPS button on the router/access point within 2 minutes, or enter the Wi-Fi password." ;;
+      eth_title)     echo "LAN configuration" ;;
+      eth_dhcp)      echo "DHCP (automatic)" ;;
+      eth_dhcp_dns)  echo "DHCP, manual DNS only" ;;
+      eth_manual)    echo "Manual (IP, gateway, DNS)" ;;
+      dns_prompt)    echo "DNS servers (comma-separated):" ;;
+      ip_prompt)     echo "IP address / prefix (e.g. 192.168.1.10/24):" ;;
+      gw_prompt)     echo "Default gateway:" ;;
+      applying)      echo "Applying configuration..." ;;
+      done_ok)       echo "Connection configured." ;;
+      done_fail)     echo "Configuration failed." ;;
+      summary_title) echo "Connection parameters" ;;
+      press_key)     echo "Press any key to return to the menu..." ;;
+      gsm_title)     echo "Mobile broadband (3G/4G)" ;;
+      gsm_wait)      echo "Detecting mobile modem..." ;;
+      gsm_none)      echo "No mobile modem detected." ;;
+      gsm_info)      echo "Modem / SIM status" ;;
+      gsm_apn_menu)  echo "APN (access point)" ;;
+      gsm_apn_tim)   echo "TIM (ibox.tim.it)" ;;
+      gsm_apn_vod)   echo "Vodafone (mobile.vodafone.it)" ;;
+      gsm_apn_iliad) echo "Iliad (iliad)" ;;
+      gsm_apn_wind)  echo "WindTre (internet.it)" ;;
+      gsm_apn_manual) echo "Manual APN" ;;
+      gsm_apn_prompt) echo "APN:" ;;
+      gsm_pin_prompt) echo "SIM PIN (if required, else leave empty):" ;;
+      gsm_user_prompt) echo "Username (optional):" ;;
+      gsm_pass_prompt) echo "Password (optional):" ;;
+      custom_dns)      echo "CUSTOM DNS" ;;
+      dns_in_use)      echo "DNS IN USE" ;;
+      dns_in_use_none) echo "none" ;;
+      custom_dns_title) echo "Custom DNS" ;;
+      custom_dns_prompt) echo "DNS servers (comma or space separated). Leave empty to use provider/DHCP DNS again:" ;;
+      custom_dns_applied) echo "Custom DNS applied:" ;;
+      custom_dns_cleared) echo "Custom DNS removed. Using provider/DHCP DNS." ;;
+      custom_dns_invalid) echo "Invalid DNS address. Use IPv4 only (e.g. 1.1.1.1, 8.8.8.8)." ;;
+    esac
+  else
+    case "$1" in
+      title)         echo "CONFIGURA RETE" ;;
+      active_title)  echo "Connessione attiva" ;;
+      active_none)   echo "Nessuna connessione attiva." ;;
+      pick_iface)    echo "Scelta (Q per uscire): " ;;
+      ifaces_section) echo "Configura Interfacce e connessione" ;;
+      no_ifaces)     echo "Nessuna interfaccia di rete trovata." ;;
+      invalid)       echo "Scelta non valida." ;;
+      wifi_title)    echo "Reti WiFi" ;;
+      wifi_scan)     echo "Scansione WiFi..." ;;
+      wifi_none)     echo "Nessuna rete trovata." ;;
+      wifi_pwd)      echo "Password Wi-Fi" ;;
+      wifi_wps_hint) echo "Premi il pulsante WPS sul router/access point entro 2 minuti, oppure inserisci la password Wi-Fi." ;;
+      eth_title)     echo "Configurazione LAN" ;;
+      eth_dhcp)      echo "DHCP (automatico)" ;;
+      eth_dhcp_dns)  echo "DHCP, solo DNS manuali" ;;
+      eth_manual)    echo "Manuale (IP, gateway, DNS)" ;;
+      dns_prompt)    echo "Server DNS (separati da virgola):" ;;
+      ip_prompt)     echo "Indirizzo IP / prefisso (es. 192.168.1.10/24):" ;;
+      gw_prompt)     echo "Gateway predefinito:" ;;
+      applying)      echo "Applicazione configurazione..." ;;
+      done_ok)       echo "Connessione configurata." ;;
+      done_fail)     echo "Configurazione non riuscita." ;;
+      summary_title) echo "Parametri connessione" ;;
+      press_key)     echo "Premi un tasto per tornare al menu..." ;;
+      gsm_title)     echo "Mobile broadband (3G/4G)" ;;
+      gsm_wait)      echo "Rilevamento modem mobile..." ;;
+      gsm_none)      echo "Nessun modem mobile rilevato." ;;
+      gsm_info)      echo "Stato modem / SIM" ;;
+      gsm_apn_menu)  echo "APN (punto di accesso)" ;;
+      gsm_apn_tim)   echo "TIM (ibox.tim.it)" ;;
+      gsm_apn_vod)   echo "Vodafone (mobile.vodafone.it)" ;;
+      gsm_apn_iliad) echo "Iliad (iliad)" ;;
+      gsm_apn_wind)  echo "WindTre (internet.it)" ;;
+      gsm_apn_manual) echo "APN manuale" ;;
+      gsm_apn_prompt) echo "APN:" ;;
+      gsm_pin_prompt) echo "PIN SIM (se richiesto, altrimenti vuoto):" ;;
+      gsm_user_prompt) echo "Utente (opzionale):" ;;
+      gsm_pass_prompt) echo "Password (opzionale):" ;;
+      custom_dns)      echo "DNS PERSONALIZZATO" ;;
+      dns_in_use)      echo "DNS IN USO" ;;
+      dns_in_use_none) echo "nessuno" ;;
+      custom_dns_title) echo "DNS personalizzato" ;;
+      custom_dns_prompt) echo "Server DNS (virgola o spazio). Lascia vuoto per usare di nuovo i DNS del provider/DHCP:" ;;
+      custom_dns_applied) echo "DNS personalizzato applicato:" ;;
+      custom_dns_cleared) echo "DNS personalizzato rimosso. Uso DNS provider/DHCP." ;;
+      custom_dns_invalid) echo "Indirizzo DNS non valido. Solo IPv4 (es. 1.1.1.1, 8.8.8.8)." ;;
+    esac
+  fi
+}
+
+quelo_net_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || read -r -n 1 -s _
+}
+
+quelo_net_read_choice() {
+  local key
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    IFS= read -r -n 1 -s key
+  fi
+  echo ""
+  if [[ "${key}" == [qQ] ]]; then
+    return 1
+  fi
+  NET_CHOICE="${key}"
+  return 0
+}
+
+QUELO_CUSTOM_DNS_FILE="/run/quelo-doctor/custom-dns"
+
+quelo_net_is_ipv4() {
+  [[ "${1}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+quelo_net_custom_dns_read() {
+  [[ -f "${QUELO_CUSTOM_DNS_FILE}" ]] || return 0
+  tr -d '[:space:]' <"${QUELO_CUSTOM_DNS_FILE}" | tr ',' ' '
+}
+
+quelo_net_dns_in_use() {
+  local -a servers=()
+  local s ip seen line
+
+  while IFS= read -r s; do
+    s="${s//|/ }"
+    for ip in ${s}; do
+      [[ -z "${ip}" ]] && continue
+      quelo_net_is_ipv4 "${ip}" || continue
+      seen=0
+      for line in "${servers[@]}"; do
+        [[ "${line}" == "${ip}" ]] && seen=1 && break
+      done
+      ((seen)) || servers+=("${ip}")
+    done
+  done < <(nmcli -g IP4.DNS device show 2>/dev/null)
+
+  if ((${#servers[@]} == 0)); then
+    while read -r ip; do
+      [[ -z "${ip}" ]] && continue
+      quelo_net_is_ipv4 "${ip}" || continue
+      seen=0
+      for line in "${servers[@]}"; do
+        [[ "${line}" == "${ip}" ]] && seen=1 && break
+      done
+      ((seen)) || servers+=("${ip}")
+    done < <(grep -E '^nameserver[[:space:]]+' /etc/resolv.conf 2>/dev/null | awk '{print $2}')
+  fi
+
+  if ((${#servers[@]} == 0)); then
+    return 1
+  fi
+
+  (IFS=', '; echo "${servers[*]}")
+}
+
+quelo_net_validate_dns_list() {
+  local token
+
+  for token in $1; do
+    quelo_net_is_ipv4 "${token}" || return 1
+  done
+  return 0
+}
+
+quelo_net_apply_custom_dns() {
+  local dns con state
+
+  [[ -f "${QUELO_CUSTOM_DNS_FILE}" ]] || return 0
+  dns="$(tr -d '[:space:]' <"${QUELO_CUSTOM_DNS_FILE}")"
+  [[ -n "${dns}" ]] || return 0
+
+  while read -r con; do
+    [[ -z "${con}" ]] && continue
+    nmcli con mod "${con}" ipv4.ignore-auto-dns yes ipv4.dns "${dns}" 2>/dev/null || true
+    nmcli con mod "${con}" ipv6.ignore-auto-dns yes 2>/dev/null || true
+    state="$(nmcli -t -f STATE connection show "${con}" 2>/dev/null | cut -d: -f2)"
+    [[ "${state}" == *activated* ]] && nmcli con up "${con}" 2>/dev/null || true
+  done < <(nmcli -t -f NAME connection show 2>/dev/null)
+}
+
+quelo_net_clear_custom_dns() {
+  local con state
+
+  rm -f "${QUELO_CUSTOM_DNS_FILE}"
+  while read -r con; do
+    [[ -z "${con}" ]] && continue
+    nmcli con mod "${con}" ipv4.ignore-auto-dns no ipv4.dns "" 2>/dev/null || true
+    nmcli con mod "${con}" ipv6.ignore-auto-dns no 2>/dev/null || true
+    state="$(nmcli -t -f STATE connection show "${con}" 2>/dev/null | cut -d: -f2)"
+    [[ "${state}" == *activated* ]] && nmcli con up "${con}" 2>/dev/null || true
+  done < <(nmcli -t -f NAME connection show 2>/dev/null)
+}
+
+quelo_net_configure_custom_dns() {
+  local input current nm_dns
+
+  current="$(quelo_net_custom_dns_read)"
+  input="$(quelo_net_dialog_input "$(quelo_net_t custom_dns_title)" "$(quelo_net_t custom_dns_prompt)" "${current}")" || return 1
+  input="$(echo "${input}" | tr ',;' ' ' | xargs)"
+
+  if [[ -z "${input}" ]]; then
+    quelo_net_clear_custom_dns
+    quelo_net_dialog_msg "$(quelo_net_t custom_dns_title)" "$(quelo_net_t custom_dns_cleared)"
+    rm -f /run/quelo-menu-net-probed
+    return 0
+  fi
+
+  if ! quelo_net_validate_dns_list "${input}"; then
+    quelo_net_dialog_msg "$(quelo_net_t custom_dns_title)" "$(quelo_net_t custom_dns_invalid)"
+    return 1
+  fi
+
+  nm_dns="$(echo "${input}" | tr ' ' ',')"
+  mkdir -p /run/quelo-doctor
+  echo "${nm_dns}" >"${QUELO_CUSTOM_DNS_FILE}"
+
+  clear
+  echo "  $(quelo_net_t applying)"
+  quelo_net_apply_custom_dns
+  rm -f /run/quelo-menu-net-probed
+
+  quelo_net_dialog_msg "$(quelo_net_t custom_dns_title)" "$(quelo_net_t custom_dns_applied) ${nm_dns//,/, }"
+}
+
+quelo_net_ensure_nm() {
+  command -v nmcli >/dev/null 2>&1 || return 1
+  rfkill unblock all 2>/dev/null || true
+  systemctl start ModemManager 2>/dev/null || true
+  systemctl start NetworkManager 2>/dev/null || true
+  nmcli networking on 2>/dev/null || true
+  sleep 2
+}
+
+quelo_net_is_gsm_type() {
+  [[ "${1}" == *gsm* || "${1}" == *cdma* ]]
+}
+
+quelo_net_type_label() {
+  if quelo_net_is_gsm_type "${1}"; then
+    echo "mobile broadband (${1})"
+  else
+    echo "${1}"
+  fi
+}
+
+quelo_net_gsm_modem_index() {
+  local dev="$1" path
+
+  if ! command -v mmcli >/dev/null 2>&1; then
+    echo "any"
+    return 0
+  fi
+
+  path="$(nmcli -t -f GENERAL.PATH device show "${dev}" 2>/dev/null | cut -d: -f2-)"
+  if [[ -n "${path}" ]]; then
+    mmcli -L 2>/dev/null | awk -v p="${path}" -F/ '/Modem/ && index($0, p) { gsub(/.*Modem\//, "", $1); gsub(/ .*/, "", $1); print $1; exit }'
+    return 0
+  fi
+
+  mmcli -L 2>/dev/null | awk -F/ '/Modem/ { gsub(/.*Modem\//, "", $1); gsub(/ .*/, "", $1); print $1; exit }'
+}
+
+quelo_net_gsm_show_status() {
+  local dev="$1" modem
+
+  modem="$(quelo_net_gsm_modem_index "${dev}")"
+  [[ -z "${modem}" ]] && return 1
+
+  if command -v mmcli >/dev/null 2>&1; then
+    mmcli -m "${modem}" 2>/dev/null | grep -Ei 'model|operator|state|signal|sim|lock' | sed 's/^/    /'
+  fi
+  nmcli -f GENERAL.STATE,GSM.APN,GSM.OPERATOR-ID,GSM.REGISTRATION device show "${dev}" 2>/dev/null \
+    | sed 's/^/    /'
+}
+
+quelo_net_ensure_gsm_con() {
+  local dev="$1" name
+
+  name="$(quelo_net_con_name "${dev}")"
+  if [[ -n "${name}" ]]; then
+    echo "${name}"
+    return 0
+  fi
+
+  name="quelo-${dev}"
+  nmcli con add type gsm ifname "${dev}" con-name "${name}" autoconnect yes >/dev/null 2>&1 \
+    || nmcli con add type gsm ifname "${dev}" con-name "${name}" >/dev/null 2>&1
+  echo "${name}"
+}
+
+quelo_net_con_name() {
+  local dev="$1"
+  nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null \
+    | awk -F: -v d="${dev}" '$2 == d { print $1; exit }'
+}
+
+quelo_net_ensure_con() {
+  local dev="$1" type="$2" name
+
+  name="$(quelo_net_con_name "${dev}")"
+  if [[ -n "${name}" ]]; then
+    echo "${name}"
+    return 0
+  fi
+
+  name="quelo-${dev}"
+  if [[ "${type}" == *wifi* ]]; then
+    nmcli con add type wifi ifname "${dev}" con-name "${name}" autoconnect yes >/dev/null 2>&1 \
+      || nmcli con add type wifi ifname "${dev}" con-name "${name}" >/dev/null 2>&1
+  elif quelo_net_is_gsm_type "${type}"; then
+    nmcli con add type gsm ifname "${dev}" con-name "${name}" autoconnect yes >/dev/null 2>&1 \
+      || nmcli con add type gsm ifname "${dev}" con-name "${name}" >/dev/null 2>&1
+  else
+    nmcli con add type ethernet ifname "${dev}" con-name "${name}" autoconnect yes >/dev/null 2>&1 \
+      || nmcli con add type ethernet ifname "${dev}" con-name "${name}" >/dev/null 2>&1
+  fi
+  echo "${name}"
+}
+
+quelo_net_show_active() {
+  local line
+
+  echo "=================================="
+  printf '  %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_net_t title)" "${C_RESET}"
+  echo "=================================="
+  echo ""
+  printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_net_t active_title):" "${C_RESET}"
+
+  if nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active 2>/dev/null | grep -q .; then
+    while IFS= read -r line; do
+      [[ -z "${line}" ]] && continue
+      echo "    ${line//:/ | }"
+    done < <(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active 2>/dev/null)
+    echo ""
+    nmcli -f GENERAL.STATE,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS device show 2>/dev/null \
+      | grep -E '^(GENERAL.STATE|IP4.ADDRESS|IP4.GATEWAY|IP4.DNS)' \
+      | sed 's/^/    /'
+  else
+    echo "    $(quelo_net_t active_none)"
+  fi
+  echo ""
+}
+
+quelo_net_show_device_summary() {
+  local dev="$1" dtype
+
+  dtype="$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | awk -F: -v d="${dev}" '$1 == d { print $2; exit }')"
+
+  echo ""
+  echo "  $(quelo_net_t summary_title) — ${dev}"
+  if quelo_net_is_gsm_type "${dtype}"; then
+    nmcli -f GENERAL.STATE,GSM.APN,GSM.OPERATOR-ID,GSM.REGISTRATION,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS device show "${dev}" 2>/dev/null \
+      | grep -E '^(GENERAL.STATE|GSM\.|IP4\.)' \
+      | sed 's/^/    /'
+  else
+    nmcli -f GENERAL.STATE,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS,IP4.METHOD device show "${dev}" 2>/dev/null \
+      | grep -E '^(GENERAL.STATE|IP4.ADDRESS|IP4.GATEWAY|IP4.DNS|IP4.METHOD)' \
+      | sed 's/^/    /'
+  fi
+  echo ""
+}
+
+quelo_net_collect_devices() {
+  local known=0
+  NET_DEVS=()
+  NET_TYPES=()
+  NET_STATES=()
+
+  while IFS=: read -r dev type state _; do
+    [[ -z "${dev}" || "${dev}" == "lo" ]] && continue
+    NET_DEVS+=("${dev}")
+    NET_TYPES+=("${type}")
+    NET_STATES+=("${state}")
+  done < <(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null)
+
+  # Modem mobile visto da ModemManager ma non ancora da NM
+  if command -v mmcli >/dev/null 2>&1; then
+    while IFS= read -r wwan; do
+      [[ -z "${wwan}" ]] && continue
+      known=0
+      for d in "${NET_DEVS[@]}"; do
+        [[ "${d}" == "${wwan}" ]] && known=1 && break
+      done
+      ((known)) && continue
+      NET_DEVS+=("${wwan}")
+      NET_TYPES+=("gsm")
+      NET_STATES+=("unmanaged")
+    done < <(mmcli -L 2>/dev/null | awk -F'[][]' '/Modem/ { if ($2 ~ /^wwan/) print $2 }')
+  fi
+}
+
+quelo_net_pick_device() {
+  local i letter choice idx current_dns
+
+  quelo_net_collect_devices
+
+  current_dns="$(quelo_net_dns_in_use)" || current_dns="$(quelo_net_t dns_in_use_none)"
+  printf '  %b%s:%b %b%s%b\n' \
+    "${C_AMBER}" "$(quelo_net_t dns_in_use)" "${C_RESET}" \
+    "${C_GREEN}" "${current_dns}" "${C_RESET}"
+  echo ""
+  printf '  %bW)%b %b%s%b\n' \
+    "${C_GREEN}" "${C_RESET}" \
+    "${C_GREEN}" "$(quelo_net_t custom_dns)" "${C_RESET}"
+  echo ""
+
+  if ((${#NET_DEVS[@]} == 0)); then
+    echo "  $(quelo_net_t no_ifaces)"
+    echo ""
+    printf '  %b%s%b' "${C_AMBER}" "$(quelo_net_t pick_iface)" "${C_RESET}"
+    if ! quelo_net_read_choice; then
+      return 1
+    fi
+    choice="${NET_CHOICE}"
+    if [[ "${choice}" == [wW] ]]; then
+      return 3
+    fi
+    echo "  $(quelo_net_t invalid)"
+    sleep 1
+    return 2
+  fi
+
+  printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_net_t ifaces_section)" "${C_RESET}"
+  for i in "${!NET_DEVS[@]}"; do
+    letter="${LETTERS[$i]}"
+    printf '    %b%s)%b %s (%s) [%s]\n' \
+      "${C_GREEN}" "${letter}" "${C_RESET}" \
+      "${NET_DEVS[$i]}" "$(quelo_net_type_label "${NET_TYPES[$i]}")" "${NET_STATES[$i]}"
+  done
+  echo ""
+  printf '  %b%s%b' "${C_AMBER}" "$(quelo_net_t pick_iface)" "${C_RESET}"
+  if ! quelo_net_read_choice; then
+    return 1
+  fi
+  choice="${NET_CHOICE}"
+
+  if [[ "${choice}" == [wW] ]]; then
+    return 3
+  fi
+
+  idx=-1
+  for i in "${!LETTERS[@]}"; do
+    if [[ "${choice}" == "${LETTERS[$i]}" ]]; then
+      idx="${i}"
+      break
+    fi
+  done
+
+  if ((idx < 0 || idx >= ${#NET_DEVS[@]})); then
+    echo "  $(quelo_net_t invalid)"
+    sleep 1
+    return 2
+  fi
+
+  NET_SELECTED_DEV="${NET_DEVS[$idx]}"
+  NET_SELECTED_TYPE="${NET_TYPES[$idx]}"
+  return 0
+}
+
+quelo_net_dialog_menu() {
+  local title="$1"
+  shift
+  dialog --stdout --clear --backtitle "Quelo Doctor" --title "${title}" \
+    --menu "" "${DLG_H}" "${DLG_W}" 12 "$@" 2>/dev/tty
+}
+
+quelo_net_dialog_input() {
+  local title="$1" prompt="$2" default="${3:-}"
+  dialog --stdout --clear --backtitle "Quelo Doctor" --title "${title}" \
+    --inputbox "${prompt}" 10 "${DLG_W}" "${default}" 2>/dev/tty
+}
+
+quelo_net_dialog_password() {
+  local title="$1" prompt="$2"
+  dialog --stdout --clear --insecure --backtitle "Quelo Doctor" --title "${title}" \
+    --passwordbox "${prompt}" 10 "${DLG_W}" 2>/dev/tty
+}
+
+quelo_net_dialog_msg() {
+  local title="$1" msg="$2"
+  dialog --clear --backtitle "Quelo Doctor" --title "${title}" \
+    --msgbox "${msg}" 10 "${DLG_W}" 2>/dev/tty
+}
+
+quelo_net_wifi_configure() {
+  local dev="$1" ssid pwd choice line tag label signal sec idx
+  local -a menu_args=()
+
+  NET_SSIDS=()
+  nmcli device set "${dev}" managed yes 2>/dev/null || true
+  clear
+  echo "  $(quelo_net_t wifi_scan)"
+  nmcli device wifi rescan ifname "${dev}" 2>/dev/null || nmcli device wifi rescan 2>/dev/null || true
+  sleep 2
+
+  idx=0
+  while IFS=: read -r ssid signal sec; do
+    ssid="${ssid//\\:/:}"
+    [[ -z "${ssid}" || "${ssid}" == "--" ]] && continue
+    idx=$((idx + 1))
+    NET_SSIDS+=("${ssid}")
+    menu_args+=("${idx}" "${ssid}  ${signal}%  ${sec}")
+  done < <(nmcli -t -f SSID,SIGNAL,SECURITY device wifi list ifname "${dev}" 2>/dev/null)
+
+  if ((${#menu_args[@]} == 0)); then
+    quelo_net_dialog_msg "$(quelo_net_t wifi_title)" "$(quelo_net_t wifi_none)"
+    return 1
+  fi
+
+  choice="$(quelo_net_dialog_menu "$(quelo_net_t wifi_title)" "${menu_args[@]}")" || return 1
+  ssid="${NET_SSIDS[$((choice - 1))]}"
+
+  quelo_net_dialog_msg "$(quelo_net_t wifi_pwd)" "$(quelo_net_t wifi_wps_hint)"
+  pwd="$(quelo_net_dialog_password "$(quelo_net_t wifi_pwd)" "$(quelo_net_t wifi_pwd):")" || pwd=""
+
+  clear
+  echo "  $(quelo_net_t applying)"
+  if [[ -n "${pwd}" ]]; then
+    nmcli device wifi connect "${ssid}" password "${pwd}" ifname "${dev}"
+  else
+    nmcli device wifi connect "${ssid}" wps ifname "${dev}" 2>/dev/null \
+      || nmcli device wifi connect "${ssid}" ifname "${dev}"
+  fi
+}
+
+quelo_net_ethernet_configure() {
+  local dev="$1" mode choice con ip gw dns
+
+  choice="$(quelo_net_dialog_menu "$(quelo_net_t eth_title)" \
+    "1" "$(quelo_net_t eth_dhcp)" \
+    "2" "$(quelo_net_t eth_dhcp_dns)" \
+    "3" "$(quelo_net_t eth_manual)")" || return 1
+
+  con="$(quelo_net_ensure_con "${dev}" ethernet)"
+  nmcli device set "${dev}" managed yes 2>/dev/null || true
+
+  case "${choice}" in
+    1)
+      clear
+      echo "  $(quelo_net_t applying)"
+      nmcli con mod "${con}" ipv4.method auto ipv4.ignore-auto-dns no 2>/dev/null || true
+      nmcli con up "${con}" ifname "${dev}"
+      ;;
+    2)
+      dns="$(quelo_net_dialog_input "$(quelo_net_t eth_title)" "$(quelo_net_t dns_prompt)")" || return 1
+      clear
+      echo "  $(quelo_net_t applying)"
+      nmcli con mod "${con}" ipv4.method auto ipv4.ignore-auto-dns yes ipv4.dns "${dns}"
+      nmcli con up "${con}" ifname "${dev}"
+      ;;
+    3)
+      ip="$(quelo_net_dialog_input "$(quelo_net_t eth_title)" "$(quelo_net_t ip_prompt)")" || return 1
+      gw="$(quelo_net_dialog_input "$(quelo_net_t eth_title)" "$(quelo_net_t gw_prompt)")" || return 1
+      dns="$(quelo_net_dialog_input "$(quelo_net_t eth_title)" "$(quelo_net_t dns_prompt)")" || return 1
+      clear
+      echo "  $(quelo_net_t applying)"
+      nmcli con mod "${con}" ipv4.method manual ipv4.addresses "${ip}" ipv4.gateway "${gw}" ipv4.dns "${dns}"
+      nmcli con up "${con}" ifname "${dev}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+quelo_net_gsm_configure() {
+  local dev="$1" con modem apn pin user pwd choice status
+
+  nmcli device set "${dev}" managed yes 2>/dev/null || true
+  clear
+  echo "  $(quelo_net_t gsm_wait)"
+  sleep 3
+
+  status="$(quelo_net_gsm_show_status "${dev}" 2>/dev/null || true)"
+  if [[ -n "${status}" ]]; then
+    quelo_net_dialog_msg "$(quelo_net_t gsm_info)" "${status}"
+  fi
+
+  modem="$(quelo_net_gsm_modem_index "${dev}")"
+  pin="$(quelo_net_dialog_password "$(quelo_net_t gsm_title)" "$(quelo_net_t gsm_pin_prompt)")" || pin=""
+  if [[ -n "${pin}" ]] && command -v mmcli >/dev/null 2>&1 && [[ -n "${modem}" ]]; then
+    mmcli -m "${modem}" --pin="${pin}" 2>/dev/null || true
+    sleep 2
+  fi
+
+  choice="$(quelo_net_dialog_menu "$(quelo_net_t gsm_apn_menu)" \
+    "tim" "$(quelo_net_t gsm_apn_tim)" \
+    "vod" "$(quelo_net_t gsm_apn_vod)" \
+    "iliad" "$(quelo_net_t gsm_apn_iliad)" \
+    "wind" "$(quelo_net_t gsm_apn_wind)" \
+    "manual" "$(quelo_net_t gsm_apn_manual)")" || return 1
+
+  case "${choice}" in
+    tim)   apn="ibox.tim.it" ;;
+    vod)   apn="mobile.vodafone.it" ;;
+    iliad) apn="iliad" ;;
+    wind)  apn="internet.it" ;;
+    manual)
+      apn="$(quelo_net_dialog_input "$(quelo_net_t gsm_title)" "$(quelo_net_t gsm_apn_prompt)")" || return 1
+      ;;
+    *) return 1 ;;
+  esac
+
+  user="$(quelo_net_dialog_input "$(quelo_net_t gsm_title)" "$(quelo_net_t gsm_user_prompt)")" || user=""
+  pwd="$(quelo_net_dialog_password "$(quelo_net_t gsm_title)" "$(quelo_net_t gsm_pass_prompt)")" || pwd=""
+
+  con="$(quelo_net_ensure_gsm_con "${dev}")"
+  clear
+  echo "  $(quelo_net_t applying)"
+
+  nmcli con mod "${con}" gsm.apn "${apn}" 2>/dev/null || true
+  [[ -n "${user}" ]] && nmcli con mod "${con}" gsm.username "${user}" 2>/dev/null || true
+  [[ -n "${pwd}" ]] && nmcli con mod "${con}" gsm.password "${pwd}" 2>/dev/null || true
+  [[ -n "${pin}" ]] && nmcli con mod "${con}" gsm.pin "${pin}" 2>/dev/null || true
+
+  nmcli con up "${con}" ifname "${dev}" 2>/dev/null || nmcli con up "${con}"
+}
+
+quelo_net_configure_loop() {
+  local rc=0
+
+  while true; do
+    clear
+    quelo_net_show_active
+    quelo_net_pick_device
+    rc=$?
+    if ((rc == 1)); then
+      return 0
+    fi
+    if ((rc == 2)); then
+      continue
+    fi
+    if ((rc == 3)); then
+      quelo_net_configure_custom_dns || true
+      continue
+    fi
+
+    if [[ "${NET_SELECTED_TYPE}" == *wifi* ]]; then
+      quelo_net_wifi_configure "${NET_SELECTED_DEV}" || true
+    elif quelo_net_is_gsm_type "${NET_SELECTED_TYPE}"; then
+      quelo_net_gsm_configure "${NET_SELECTED_DEV}" || true
+    else
+      quelo_net_ethernet_configure "${NET_SELECTED_DEV}" || true
+    fi
+
+    if nmcli -t -f IP4.ADDRESS device show "${NET_SELECTED_DEV}" 2>/dev/null | grep -q .; then
+      quelo_net_apply_custom_dns
+      clear
+      echo "  $(quelo_net_t done_ok)"
+      quelo_net_show_device_summary "${NET_SELECTED_DEV}"
+      rm -f /run/quelo-menu-net-probed
+      echo ""
+      echo "  $(quelo_net_t press_key)"
+      quelo_net_pause
+    else
+      clear
+      echo "  $(quelo_net_t done_fail)"
+      sleep 2
+    fi
+  done
+}
+
+main() {
+  if ! command -v dialog >/dev/null 2>&1; then
+    echo "dialog non installato."
+    quelo_net_pause
+    return 1
+  fi
+
+  if ! quelo_net_ensure_nm; then
+    echo "NetworkManager non disponibile."
+    quelo_net_pause
+    return 1
+  fi
+
+  quelo_net_apply_custom_dns
+  quelo_net_configure_loop
+  clear
+}
+
+main "$@"

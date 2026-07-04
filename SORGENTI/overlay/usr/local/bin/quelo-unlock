@@ -1,0 +1,432 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+UNLOCK_DISCLAIMER_STAMP="/run/quelo-unlock-disclaimer-ok"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-fs.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER_BOLD=$'\033[1;33m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+DISK_DEVS=()
+DISK_SIZES=()
+DISK_MODELS=()
+DISK_VENDORS=()
+DISK_TRANS=()
+DISK_CHOICE=""
+
+quelo_unlock_tty() {
+  printf '%b' "$*" >/dev/tty 2>/dev/null || printf '%b' "$*"
+}
+
+quelo_unlock_ttyln() {
+  quelo_unlock_tty "$*"
+  quelo_unlock_tty $'\n'
+}
+
+quelo_unlock_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_unlock_t() {
+  if quelo_unlock_ui_is_en; then
+    case "$1" in
+      title)           echo "UNLOCK PASSWORDS AND ENCRYPTION" ;;
+      step_disk)       echo "Choose disk to work on" ;;
+      step_ops)        echo "Password and encryption operations" ;;
+      no_disks)        echo "No disks found." ;;
+      select_help)     echo "Number=choice | Q=back" ;;
+      prompt)          echo "Choice: " ;;
+      invalid)         echo "Invalid choice." ;;
+      unknown)         echo "N/A" ;;
+      op_win)          echo "Windows password" ;;
+      op_linux)        echo "Linux password" ;;
+      op_luks)         echo "Unlock LUKS" ;;
+      op_bitlocker)    echo "Unlock BitLocker" ;;
+      disc_header)     echo "********WARNING - EXPERIMENTAL*********" ;;
+      disc_title)      echo "IMPORTANT — READ BEFORE CONTINUING" ;;
+      disc_1)          echo "Original passwords CANNOT be recovered, only RESET." ;;
+      disc_2)          echo "Encrypted disks (BitLocker, LUKS) must be UNLOCKED first." ;;
+      disc_3)          echo "Windows: Microsoft / domain accounts cannot be reset here." ;;
+      disc_4)          echo "Windows: EFS files may become unreadable after password reset." ;;
+      disc_5)          echo "Changes WRITE to the disk — use at your own risk." ;;
+      disc_6)          echo "LUKS/BitLocker: YOUR passphrase or recovery key required — NOT hacking/brute-force." ;;
+      disc_confirm)    echo "I understand. Continue? [y/n]: " ;;
+      danger_warn)     echo "WARNING: will modify accounts on %s" ;;
+      danger_confirm1) echo "Continue? Account data will be changed. [y/n]: " ;;
+      danger_confirm2) echo "Are you REALLY sure? [y/n]: " ;;
+      cancel)          echo "Cancelled." ;;
+      press_key)       echo "Press a key to continue..." ;;
+      ok)              echo "Operation completed." ;;
+      fail)            echo "Operation failed." ;;
+      running)         echo "Running..." ;;
+      reboot_hint)     echo "Reboot the PC and try logging in." ;;
+      win_no_part)     echo "No Windows partition with SAM found on this disk." ;;
+      win_pick_part)   echo "Choose Windows partition" ;;
+      win_pick_user)   echo "Choose Windows user" ;;
+      win_no_users)    echo "No local users found in SAM." ;;
+      win_action)      echo "Action on account" ;;
+      win_act_new)     echo "Set new password" ;;
+      win_act_clear)   echo "Remove password (blank)" ;;
+      win_act_unlock)  echo "Unlock disabled account" ;;
+      win_act_admin)   echo "Promote to Administrator" ;;
+      win_pass_new)    echo "New password: " ;;
+      win_pass_confirm) echo "Confirm password: " ;;
+      win_pass_mismatch) echo "Passwords do not match." ;;
+      lin_no_part)     echo "No unencrypted Linux root partition found." ;;
+      lin_luks_hint)   echo "LUKS encrypted? Use option 3 (Unlock LUKS) first." ;;
+      lin_pick_part)   echo "Choose Linux root partition" ;;
+      lin_pick_user)   echo "Choose Linux user" ;;
+      lin_no_users)    echo "No users found." ;;
+      lin_pass_new)    echo "New password: " ;;
+      lin_pass_confirm) echo "Confirm password: " ;;
+      lin_pass_mismatch) echo "Passwords do not match." ;;
+      luks_no_tool)    echo "cryptsetup not available." ;;
+      luks_no_part)    echo "No LUKS partition found on this disk." ;;
+      luks_pick_part)  echo "Choose LUKS partition" ;;
+      luks_pass_prompt) echo "LUKS passphrase (required): " ;;
+      luks_bad_key)    echo "Wrong passphrase or unlock failed." ;;
+      luks_mounted)    echo "Decrypted volume mounted at:" ;;
+      luks_open_no_mount) echo "Unlocked but auto-mount failed. Device:" ;;
+      luks_stays_open) echo "Volume stays open for this session (use other menus)." ;;
+      bl_no_tool)      echo "dislocker not available." ;;
+      bl_no_part)      echo "No BitLocker partition found on this disk." ;;
+      bl_pick_part)    echo "Choose BitLocker partition" ;;
+      bl_method)       echo "Unlock method" ;;
+      bl_pass)         echo "BitLocker password" ;;
+      bl_recovery)     echo "Recovery key (48 digits)" ;;
+      bl_pass_prompt)  echo "BitLocker password: " ;;
+      bl_recovery_prompt) echo "Recovery key: " ;;
+      bl_bad_key)      echo "Wrong key/password or unlock failed." ;;
+      bl_mounted)      echo "Decrypted volume mounted at:" ;;
+      bl_stays_open)   echo "Volume stays open for this session (use other menus)." ;;
+    esac
+  else
+    case "$1" in
+      title)           echo "SBLOCCA PASSWORD E CRYPTAZIONI" ;;
+      step_disk)       echo "Scegli disco su cui lavorare" ;;
+      step_ops)        echo "Operazioni password e cifratura" ;;
+      no_disks)        echo "Nessun disco trovato." ;;
+      select_help)     echo "Numero=scelta | Q=indietro" ;;
+      prompt)          echo "Scelta: " ;;
+      invalid)         echo "Scelta non valida." ;;
+      unknown)         echo "N/D" ;;
+      op_win)          echo "Password Windows" ;;
+      op_linux)        echo "Password Linux" ;;
+      op_luks)         echo "Sblocca LUKS" ;;
+      op_bitlocker)    echo "Sblocca BitLocker" ;;
+      disc_header)     echo "********ATTENZIONE - EXPERIMENTAL*********" ;;
+      disc_title)      echo "IMPORTANTE — LEGGERE PRIMA DI CONTINUARE" ;;
+      disc_1)          echo "Le password originali NON si recuperano, solo si REIMPOSTANO." ;;
+      disc_2)          echo "Dischi criptati (BitLocker, LUKS) vanno prima SBLOCCATI." ;;
+      disc_3)          echo "Windows: account Microsoft / dominio non si resettano da qui." ;;
+      disc_4)          echo "Windows: file EFS possono diventare illeggibili dopo il reset." ;;
+      disc_5)          echo "Le modifiche SCRIVONO sul disco — a tuo rischio." ;;
+      disc_6)          echo "LUKS/BitLocker: serve LA TUA passphrase o chiave recupero — NON e hacking/brute-force." ;;
+      disc_confirm)    echo "Ho capito. Continuare? [s/n]: " ;;
+      danger_warn)     echo "ATTENZIONE: modifica account su %s" ;;
+      danger_confirm1) echo "Continuare? I dati account saranno modificati. [s/n]: " ;;
+      danger_confirm2) echo "Sei VERAMENTE sicuro? [s/n]: " ;;
+      cancel)          echo "Annullato." ;;
+      press_key)       echo "Premi un tasto per continuare..." ;;
+      ok)              echo "Operazione completata." ;;
+      fail)            echo "Operazione non riuscita." ;;
+      running)         echo "In corso..." ;;
+      reboot_hint)     echo "Riavvia il PC e prova l'accesso." ;;
+      win_no_part)     echo "Nessuna partizione Windows con SAM su questo disco." ;;
+      win_pick_part)   echo "Scegli partizione Windows" ;;
+      win_pick_user)   echo "Scegli utente Windows" ;;
+      win_no_users)    echo "Nessun utente locale nel SAM." ;;
+      win_action)      echo "Azione sull'account" ;;
+      win_act_new)     echo "Imposta nuova password" ;;
+      win_act_clear)   echo "Rimuovi password (vuota)" ;;
+      win_act_unlock)  echo "Sblocca account disabilitato" ;;
+      win_act_admin)   echo "Promuovi ad Amministratore" ;;
+      win_pass_new)    echo "Nuova password: " ;;
+      win_pass_confirm) echo "Conferma password: " ;;
+      win_pass_mismatch) echo "Le password non coincidono." ;;
+      lin_no_part)     echo "Nessuna root Linux non cifrata trovata." ;;
+      lin_luks_hint)   echo "Disco LUKS? Usa prima voce 3 (Sblocca LUKS)." ;;
+      lin_pick_part)   echo "Scegli partizione root Linux" ;;
+      lin_pick_user)   echo "Scegli utente Linux" ;;
+      lin_no_users)    echo "Nessun utente trovato." ;;
+      lin_pass_new)    echo "Nuova password: " ;;
+      lin_pass_confirm) echo "Conferma password: " ;;
+      lin_pass_mismatch) echo "Le password non coincidono." ;;
+      luks_no_tool)    echo "cryptsetup non disponibile." ;;
+      luks_no_part)    echo "Nessuna partizione LUKS su questo disco." ;;
+      luks_pick_part)  echo "Scegli partizione LUKS" ;;
+      luks_pass_prompt) echo "Passphrase LUKS (obbligatoria): " ;;
+      luks_bad_key)    echo "Passphrase errata o sblocco non riuscito." ;;
+      luks_mounted)    echo "Volume decifrato montato in:" ;;
+      luks_open_no_mount) echo "Sbloccato ma mount automatico fallito. Device:" ;;
+      luks_stays_open) echo "Volume resta aperto per questa sessione (usa altri menu)." ;;
+      bl_no_tool)      echo "dislocker non disponibile." ;;
+      bl_no_part)      echo "Nessuna partizione BitLocker su questo disco." ;;
+      bl_pick_part)    echo "Scegli partizione BitLocker" ;;
+      bl_method)       echo "Metodo di sblocco" ;;
+      bl_pass)         echo "Password BitLocker" ;;
+      bl_recovery)     echo "Chiave di recupero (48 cifre)" ;;
+      bl_pass_prompt)  echo "Password BitLocker: " ;;
+      bl_recovery_prompt) echo "Chiave di recupero: " ;;
+      bl_bad_key)      echo "Chiave/password errata o sblocco non riuscito." ;;
+      bl_mounted)      echo "Volume decifrato montato in:" ;;
+      bl_stays_open)   echo "Volume resta aperto per questa sessione (usa altri menu)." ;;
+    esac
+  fi
+}
+
+quelo_unlock_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  if command -v tput >/dev/null 2>&1; then
+    tput reset >/dev/tty 2>/dev/null || true
+  fi
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_unlock_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+}
+
+quelo_unlock_confirm_yn() {
+  local prompt="$1" reply
+
+  quelo_unlock_tty "${C_AMBER}${prompt}${C_RESET}"
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  quelo_unlock_tty $'\n'
+  [[ "${reply}" == [qQ] ]] && return 1
+  if quelo_unlock_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_unlock_confirm_danger() {
+  local target="$1"
+
+  quelo_unlock_ttyln ""
+  quelo_unlock_ttyln "${C_RED}  $(printf "$(quelo_unlock_t danger_warn)" "${target}")${C_RESET}"
+  quelo_unlock_ttyln ""
+  quelo_unlock_confirm_yn "$(quelo_unlock_t danger_confirm1)" || return 1
+  quelo_unlock_confirm_yn "$(quelo_unlock_t danger_confirm2)" || return 1
+  return 0
+}
+
+quelo_unlock_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  if [[ "${key}" == [qQ] ]]; then
+    quelo_unlock_tty $'\n'
+    return 1
+  fi
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key </dev/tty 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { quelo_unlock_tty $'\n'; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+  quelo_unlock_tty $'\n'
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_unlock_collect_disks() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev dev dtype size model vendor tran
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* || "${dev}" == /dev/sr* || "${dev}" == /dev/loop* || "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    DISK_MODELS+=("${model:-$(quelo_unlock_t unknown)}")
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_unlock_model_line() {
+  local idx="$1"
+  if [[ -n "${DISK_VENDORS[$idx]}" && "${DISK_VENDORS[$idx]}" != "${DISK_MODELS[$idx]}" ]]; then
+    echo "${DISK_VENDORS[$idx]} ${DISK_MODELS[$idx]}"
+  else
+    echo "${DISK_MODELS[$idx]}"
+  fi
+}
+
+quelo_unlock_show_disclaimer() {
+  [[ -f "${UNLOCK_DISCLAIMER_STAMP}" ]] && return 0
+
+  quelo_unlock_ui_reset
+  quelo_unlock_ttyln "=================================="
+  quelo_unlock_ttyln "${C_RED}  $(quelo_unlock_t disc_header)${C_RESET}"
+  quelo_unlock_ttyln "${C_RED}  $(quelo_unlock_t disc_title)${C_RESET}"
+  quelo_unlock_ttyln "=================================="
+  quelo_unlock_ttyln ""
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_1)"
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_2)"
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_3)"
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_4)"
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_5)"
+  quelo_unlock_ttyln "  $(quelo_unlock_t disc_6)"
+  quelo_unlock_ttyln ""
+  if quelo_unlock_confirm_yn "$(quelo_unlock_t disc_confirm)"; then
+    touch "${UNLOCK_DISCLAIMER_STAMP}"
+    return 0
+  fi
+  return 1
+}
+
+quelo_unlock_pick_disk() {
+  local i num choice idx
+
+  while true; do
+    quelo_unlock_collect_disks
+    quelo_unlock_ui_reset
+    quelo_unlock_ttyln "=================================="
+    quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+    quelo_unlock_ttyln "=================================="
+    quelo_unlock_ttyln ""
+    quelo_unlock_ttyln "${C_AMBER}  $(quelo_unlock_t step_disk)${C_RESET}"
+    quelo_unlock_ttyln ""
+
+    if ((${#DISK_DEVS[@]} == 0)); then
+      quelo_unlock_ttyln "  $(quelo_unlock_t no_disks)"
+      quelo_unlock_pause
+      return 1
+    fi
+
+    for i in "${!DISK_DEVS[@]}"; do
+      num=$((i + 1))
+      quelo_unlock_ttyln "  ${C_GREEN}${num})${C_RESET} ${DISK_DEVS[$i]}  ${DISK_SIZES[$i]}  $(quelo_unlock_model_line "${i}")"
+    done
+    quelo_unlock_ttyln ""
+    quelo_unlock_ttyln "${C_AMBER}  $(quelo_unlock_t select_help)${C_RESET}"
+    quelo_unlock_tty "${C_AMBER}  $(quelo_unlock_t prompt)${C_RESET}"
+    quelo_unlock_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_unlock_ttyln "  $(quelo_unlock_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#DISK_DEVS[@]})) || { quelo_unlock_ttyln "  $(quelo_unlock_t invalid)"; sleep 1; continue; }
+    printf '%s\n' "${DISK_DEVS[$idx]}"
+    return 0
+  done
+}
+
+quelo_unlock_ops_menu() {
+  local disk="$1" choice
+
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-unlock-windows.sh"
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-unlock-linux.sh"
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-unlock-luks.sh"
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-unlock-bitlocker.sh"
+
+  while true; do
+    quelo_unlock_ui_reset
+    quelo_unlock_ttyln "=================================="
+    quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+    quelo_unlock_ttyln "=================================="
+    quelo_unlock_ttyln ""
+    quelo_unlock_ttyln "${C_AMBER}  $(quelo_unlock_t step_ops) — ${disk}${C_RESET}"
+    quelo_unlock_ttyln ""
+    quelo_unlock_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_unlock_t op_win)"
+    quelo_unlock_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_unlock_t op_linux)"
+    quelo_unlock_ttyln "  ${C_GREEN}3)${C_RESET} $(quelo_unlock_t op_luks)"
+    quelo_unlock_ttyln "  ${C_GREEN}4)${C_RESET} $(quelo_unlock_t op_bitlocker)"
+    quelo_unlock_ttyln ""
+    quelo_unlock_ttyln "${C_AMBER}  $(quelo_unlock_t select_help)${C_RESET}"
+    quelo_unlock_tty "${C_AMBER}  $(quelo_unlock_t prompt)${C_RESET}"
+    quelo_unlock_read_choice || return 0
+    choice="${DISK_CHOICE}"
+
+    case "${choice}" in
+      1)
+        quelo_unlock_ui_reset
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln ""
+        quelo_unlock_windows_menu "${disk}"
+        ;;
+      2)
+        quelo_unlock_ui_reset
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln ""
+        quelo_unlock_linux_menu "${disk}"
+        ;;
+      3)
+        quelo_unlock_ui_reset
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln ""
+        quelo_unlock_luks_menu "${disk}"
+        ;;
+      4)
+        quelo_unlock_ui_reset
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln "${C_GREEN_BOLD}      $(quelo_unlock_t title)${C_RESET}"
+        quelo_unlock_ttyln "=================================="
+        quelo_unlock_ttyln ""
+        quelo_unlock_bitlocker_menu "${disk}"
+        ;;
+      *)
+        quelo_unlock_ttyln "  $(quelo_unlock_t invalid)"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+quelo_unlock_menu() {
+  local disk
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+  quelo_unlock_show_disclaimer || return 0
+
+  while true; do
+    disk="$(quelo_unlock_pick_disk)" || return 0
+    quelo_unlock_ops_menu "${disk}"
+  done
+}
+
+quelo_unlock_menu

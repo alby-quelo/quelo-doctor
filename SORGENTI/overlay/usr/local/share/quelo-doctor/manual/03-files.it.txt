@@ -1,0 +1,6 @@
+3 — GESTIONE FILE (mc)
+══════════════════════════════════════════════════════════════
+Avvia Midnight Commander per copiare, spostare, rinominare file
+tra dischi montati e destinazioni USB.
+
+I dischi con automount compaiono sotto /media/

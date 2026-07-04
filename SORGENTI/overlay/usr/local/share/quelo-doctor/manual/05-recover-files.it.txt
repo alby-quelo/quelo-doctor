@@ -1,0 +1,11 @@
+5 — RECUPERA FILE
+══════════════════════════════════════════════════════════════
+Wizard: disco sorgente → partizione → destinazione → conferma.
+
+Motori
+  - ext2/3/4: extundelete / ext4magic
+  - NTFS: ntfsundelete + helper Python
+
+Solo tipi file in whitelist (documenti, media, archivi, ecc.).
+Barra progresso e riepilogo finale.
+Destinazione: altra partizione o USB con spazio libero.

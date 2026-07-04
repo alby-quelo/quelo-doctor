@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Logo Quelo Doctor a sinistra nel menu (solo framebuffer menu, non boot)."""
+import glob
+import os
+import re
+import struct
+import fcntl
+import array
+
+LOGO_PATH = "/usr/share/quelo-doctor/logo.png"
+FB_PATH = "/dev/fb0"
+LAYOUT_FILE = "/run/quelo-menu-layout"
+
+FBIOGET_VSCREENINFO = 0x4600
+FBIOGET_FSCREENINFO = 0x4602
+
+BASE_X = 30
+BASE_Y = 20
+BASE_LOGO = 120
+BASE_COL = 22
+
+
+def detect_drm_resolution():
+    best = (800, 600)
+    for modes_path in glob.glob("/sys/class/drm/card*/card*-*/modes"):
+        try:
+            with open(modes_path, encoding="utf-8") as handle:
+                for line in handle:
+                    match = re.fullmatch(r"(\d+)x(\d+)", line.strip())
+                    if not match:
+                        continue
+                    w, h = int(match.group(1)), int(match.group(2))
+                    if w * h > best[0] * best[1]:
+                        best = (w, h)
+        except OSError:
+            continue
+    return best
+
+
+def fb_info():
+    vbuf = array.array("B", bytes(160))
+    with open(FB_PATH, "rb") as fb:
+        fcntl.ioctl(fb, FBIOGET_VSCREENINFO, vbuf, True)
+    xres, yres, _, _, _, _, bpp = struct.unpack_from("7I", bytes(vbuf))
+
+    fbuf = array.array("B", bytes(80))
+    with open(FB_PATH, "rb") as fb:
+        fcntl.ioctl(fb, FBIOGET_FSCREENINFO, fbuf, True)
+    line_length = struct.unpack_from("I", bytes(fbuf), 32)[0] or (xres * (bpp // 8))
+    return xres, yres, bpp, line_length
+
+
+def write_layout(xres, yres, logo_size):
+    scale = min(xres / 800.0, yres / 600.0, 2.5)
+    menu_col = max(BASE_COL, int((BASE_X * scale + logo_size) / 8) + 3)
+    try:
+        with open(LAYOUT_FILE, "w", encoding="utf-8") as lf:
+            lf.write(
+                f"XRES={xres}\nYRES={yres}\n"
+                f"SCALE={max(100, int(scale * 100))}\n"
+                f"MENU_COL={menu_col}\nMENU_ROW=2\n"
+            )
+    except OSError:
+        pass
+
+
+def write_pixel(fb, offset, bpp_bytes, r, g, b):
+    fb.seek(offset)
+    if bpp_bytes == 4:
+        fb.write(struct.pack("4B", b, g, r, 0))
+    elif bpp_bytes == 3:
+        fb.write(struct.pack("3B", b, g, r))
+    elif bpp_bytes == 2:
+        pixel = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+        fb.write(struct.pack("H", pixel))
+
+
+def main():
+    if not os.path.exists(LOGO_PATH) or not os.path.exists(FB_PATH):
+        return 1
+
+    try:
+        xres, yres, bpp, line_length = fb_info()
+    except OSError:
+        return 1
+
+    try:
+        from PIL import Image
+    except ImportError:
+        write_layout(xres, yres, BASE_LOGO)
+        return 1
+
+    try:
+        bpp_bytes = bpp // 8
+        scale = min(xres / 800.0, yres / 600.0, 2.5)
+        scale = max(1.0, scale)
+        logo_size = int(BASE_LOGO * scale)
+        x_pos = int(BASE_X * scale)
+        y_pos = int(BASE_Y * scale)
+        write_layout(xres, yres, logo_size)
+
+        img = Image.open(LOGO_PATH).convert("RGBA")
+        img = img.resize((logo_size, logo_size), Image.LANCZOS)
+
+        with open(FB_PATH, "rb+") as fb:
+            for y in range(img.height):
+                row_offset = (y_pos + y) * line_length + x_pos * bpp_bytes
+                for x in range(img.width):
+                    r, g, b, a = img.getpixel((x, y))
+                    if a < 64:
+                        continue
+                    write_pixel(fb, row_offset + x * bpp_bytes, bpp_bytes, r, g, b)
+
+        return 0
+    except Exception:
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

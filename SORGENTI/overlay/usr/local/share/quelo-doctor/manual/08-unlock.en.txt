@@ -1,0 +1,2 @@
+8 — UNLOCK PASSWORDS (experimental)
+Windows/Linux password reset. LUKS/BitLocker need YOUR keys. No brute-force.

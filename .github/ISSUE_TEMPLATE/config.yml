@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Documentazione in ISO (menu M)"
+    url: https://github.com/alby-quelo/quelo-doctor#readme
+    about: "Manuale integrato nella live: avvia l'ISO e premi M nel menu principale."

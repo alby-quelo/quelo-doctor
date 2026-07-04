@@ -1,0 +1,44 @@
+GENERAL MANUAL — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+What is Quelo Doctor
+  Live rescue ISO for PCs. USB/DVD boot, text menu, no desktop.
+  Disk diagnostics, data recovery, offline antivirus, boot repair.
+
+Boot
+  1. Boot from USB (UEFI or Legacy BIOS)
+  2. Wait for the green/amber main menu
+  3. Single key choice
+
+Common navigation
+  - Number = menu item
+  - Q = back / cancel in submenus and text viewers (C/M)
+  - y/n or s/n = confirmations (locale from menu L)
+  - Alt+Z = shutdown   Alt+R = reboot
+
+MAIN section (1-8)
+  1 Root shell
+  2 Disk check — SMART, partitions
+  3 File manager — Midnight Commander
+  4 Disk recovery — TestDisk
+  5 File recovery — ext/NTFS wizard
+  6 OS boot repair — GRUB, MBR, Windows
+  7 Infection scan — ClamAV, YARA
+  8 Unlock passwords (experimental)
+
+ENVIRONMENT
+  L = locale and keyboard
+  N = network
+
+INFO
+  C = credits and licenses
+  M = this manual
+  S = save report/log to USB
+
+Tips
+  - Connect network (N) before antivirus definition updates
+  - Never target the live USB disk for repairs
+  - Double confirm destructive operations
+  - Reboot after boot repair to verify
+
+Version shown at top of menu: QUELO DOCTOR x.xx alpha

@@ -1,0 +1,72 @@
+# WiFi non-free (non-free-firmware)
+firmware-iwlwifi
+firmware-realtek
+firmware-brcm80211
+firmware-mediatek
+firmware-libertas
+firmware-marvell-prestera
+firmware-ti-connectivity
+
+# Ethernet non-free (non-free-firmware)
+firmware-bnx2
+firmware-bnx2x
+firmware-netxen
+firmware-qlogic
+firmware-myricom
+firmware-cavium
+firmware-netronome
+
+# Locale e tastiera
+locales
+console-setup
+console-terminus
+kbd
+python3-pil
+iproute2
+vim
+mc
+
+# Controllo dischi
+smartmontools
+nvme-cli
+ntfs-3g
+fuse3
+exfatprogs
+dosfstools
+parted
+e2fsprogs
+xfsprogs
+btrfs-progs
+testdisk
+extundelete
+ext4magic
+
+# Riparazione avvio
+grub-pc-bin
+grub-efi-amd64-bin
+grub-common
+os-prober
+efibootmgr
+
+# Antivirus / malware
+clamav
+clamav-freshclam
+chkrootkit
+yara
+libhivex-bin
+chntpw
+cryptsetup
+dislocker
+
+# Rete
+network-manager
+modemmanager
+usb-modeswitch
+usb-modeswitch-data
+wpasupplicant
+iw
+wireless-tools
+dialog
+less
+man-db
+rfkill

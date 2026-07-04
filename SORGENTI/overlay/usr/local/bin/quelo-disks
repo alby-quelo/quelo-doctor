@@ -1,0 +1,1738 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-console-quiet.sh
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-fs.sh
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-fs-repair.sh
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-disk-parted.sh
+
+# Fosfori CRT: verde e ambra (come live-menu)
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+quelo_disk_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_disk_t() {
+  if quelo_disk_ui_is_en; then
+    case "$1" in
+      title)         echo "DISK CHECK" ;;
+      no_disks)      echo "No disks found." ;;
+      select)        echo "SELECT" ;;
+      smart)         echo "SMART" ;;
+      wear)          echo "Wear" ;;
+      power_on)      echo "Power-on" ;;
+      temp)          echo "Temp" ;;
+      health)        echo "Health" ;;
+      interface)     echo "Interface" ;;
+      unknown)       echo "N/A" ;;
+      unsupported)   echo "Not supported" ;;
+      passed)        echo "PASSED" ;;
+      failed)        echo "FAILED" ;;
+      good)          echo "GOOD" ;;
+      warning)       echo "WARNING" ;;
+      critical)      echo "CRITICAL" ;;
+      prompt)        echo "Choice (number=disk, letter=partition, N, D, I, Q to exit): " ;;
+      part_ops_create) echo "Create partition" ;;
+      invalid)       echo "Invalid choice." ;;
+      unmount_action) echo "SAFELY UNMOUNT VOLUME" ;;
+      unmount_title) echo "UNMOUNT VOLUME" ;;
+      unmount_none)  echo "No volumes mounted under /media." ;;
+      unmount_select) echo "SELECT VOLUME" ;;
+      unmount_confirm) echo "Unmount %s? [y/n]: " ;;
+      unmount_ok)    echo "Volume unmounted. You can disconnect the drive." ;;
+      unmount_busy)  echo "Volume is busy. Close mc or other programs using it and try again." ;;
+      unmount_fail)  echo "Unmount failed." ;;
+      unmount_cancel) echo "Operation cancelled." ;;
+      press_key)     echo "Press any key to return..." ;;
+      ntfs_force_action) echo "FORCE NTFS MOUNT (hibernated Windows)" ;;
+      ntfs_force_title) echo "FORCE NTFS MOUNT" ;;
+      ntfs_force_intro) echo "If Windows fast startup/hibernation blocks write access, this removes the hibernation file and mounts read-write. The open Windows session is lost; your files stay on disk." ;;
+      ntfs_force_none) echo "No NTFS partition found." ;;
+      ntfs_force_select) echo "SELECT NTFS PARTITION" ;;
+      ntfs_force_confirm) echo "Force mount %s read-write? [y/n]: " ;;
+      ntfs_force_ok) echo "NTFS mounted read-write on %s" ;;
+      ntfs_force_fail) echo "Force mount failed." ;;
+      ntfs_force_cancel) echo "Operation cancelled." ;;
+      ntfs_already_rw) echo "Partition already mounted read-write." ;;
+      ntfs_state_ro) echo "read-only" ;;
+      ntfs_state_rw) echo "read-write" ;;
+      ntfs_state_unmounted) echo "not mounted" ;;
+      mount_action) echo "MOUNT PARTITION" ;;
+      mount_title) echo "MOUNT PARTITION" ;;
+      mount_intro) echo "Mount an unmounted partition on the active disk (block device, not /media folder)." ;;
+      mount_none) echo "No mountable partition found on the active disk." ;;
+      mount_select) echo "SELECT PARTITION" ;;
+      mount_ok) echo "Mounted on %s" ;;
+      mount_fail) echo "Mount failed. For NTFS hibernated use T (force)." ;;
+      mount_cancel) echo "Operation cancelled." ;;
+      mount_already) echo "Already mounted." ;;
+      mount_status_mounted) echo "mounted" ;;
+      mount_status_unmounted) echo "not mounted" ;;
+      mount_label_mounted) echo "MOUNTED" ;;
+      mount_label_unmounted) echo "NOT MOUNTED" ;;
+      disk_type) echo "Disk type" ;;
+      partition_scheme) echo "Partition scheme" ;;
+      partitions_header) echo "Partitions" ;;
+      unallocated) echo "Unallocated space" ;;
+      part_live) echo "LIVE (no operations)" ;;
+      part_no_ops) echo "No operations on unallocated space." ;;
+      part_no_mount_ops) echo "No mount operations for this partition." ;;
+      part_ops_title) echo "PARTITION OPERATIONS" ;;
+      part_ops_mount) echo "Mount" ;;
+      part_ops_unmount) echo "Unmount" ;;
+      part_ops_force_ntfs) echo "Force NTFS mount (hibernated Windows)" ;;
+      part_ops_repair) echo "(chkdsk /f /r)" ;;
+      part_ops_repair_quick) echo "(chkdsk /f)" ;;
+      part_ops_back) echo "Back" ;;
+      part_ops_help) echo "M=mount U=unmount T=force NTFS  F=chkdsk /f  R=chkdsk /f /r  X=delete  W=format  Q=back" ;;
+      part_ops_prompt) echo "Choice (Q to go back): " ;;
+      select_help) echo "Number=disk | letter=partition ops | N=new partition | D=disk ops | I=S.M.A.R.T. | Q=exit" ;;
+      submenu_title) echo "DISK DETAILS (S.M.A.R.T.)" ;;
+      submenu_wait)  echo "Submenu coming soon. Press any key..." ;;
+      part_table)    echo "PARTITION TABLE (parted)" ;;
+      part_lsblk)    echo "PARTITIONS (lsblk -f)" ;;
+      model)         echo "Model" ;;
+      size)          echo "Size" ;;
+      active_disk)   echo "ACTIVE DISK" ;;
+      no_disk_selected) echo "No disk selected — choose a number first." ;;
+      active_commands) echo "Letter=partition ops | N=new partition | D=disk table ops (destructive)" ;;
+      need_disk)     echo "Select a disk with a number first." ;;
+      unmount_none_disk) echo "No volumes mounted on this disk under /media." ;;
+      mount_none_disk) echo "No mountable partitions on this disk." ;;
+      ntfs_force_none_disk) echo "No NTFS partitions on this disk." ;;
+      repair_title) echo "REPAIR FILESYSTEM" ;;
+      repair_intro) echo "Checks and repairs the unmounted partition. May take a long time on large disks." ;;
+      repair_intro_ntfs) echo "NTFS full: ntfsfix then badblocks sector scan (chkdsk /f + /r)." ;;
+      repair_intro_ntfs_quick) echo "NTFS quick: ntfsfix only (chkdsk /f), no sector scan." ;;
+      repair_intro_linux) echo "Linux: e2fsck/xfs_repair/btrfs check with automatic repair where supported." ;;
+      repair_tool) echo "Tool" ;;
+      repair_confirm) echo "Full repair %s? May take a long time. [y/n]: " ;;
+      repair_confirm_quick) echo "Quick repair %s (ntfsfix only)? [y/n]: " ;;
+      repair_need_unmount) echo "Unmount the partition before repairing." ;;
+      repair_not_available) echo "Not available — unmount the partition first." ;;
+      repair_unsupported) echo "Filesystem repair not supported for this partition." ;;
+      repair_running) echo "Repair in progress..." ;;
+      repair_ok) echo "Repair completed." ;;
+      repair_fail) echo "Repair failed (exit code %s)." ;;
+      repair_cancel) echo "Operation cancelled." ;;
+      disk_ops_title) echo "DISK OPERATIONS" ;;
+      disk_ops_intro) echo "Destructive operations — all data on the disk may be lost." ;;
+      disk_ops_create_gpt) echo "Create GPT partition table" ;;
+      disk_ops_create_mbr) echo "Create MBR (msdos) partition table" ;;
+      disk_ops_delete_table) echo "Delete partition table (wipe disk)" ;;
+      disk_ops_create_part) echo "Create partition (use all free space)" ;;
+      disk_ops_help) echo "1=GPT 2=MBR 3=wipe table  Q=back" ;;
+      disk_ops_prompt) echo "Choice: " ;;
+      part_ops_delete) echo "Delete partition" ;;
+      part_ops_format) echo "Format partition" ;;
+      format_title) echo "FORMAT PARTITION" ;;
+      format_select) echo "Filesystem: 1=NTFS 2=ext4 3=FAT32 4=exFAT" ;;
+      format_prompt) echo "Choice: " ;;
+      danger_warn) echo "WARNING: destructive operation on %s" ;;
+      danger_confirm1) echo "Continue? All data may be LOST. [y/n]: " ;;
+      danger_confirm2) echo "Do you REALLY want to proceed? [y/n]: " ;;
+      parted_no_parted) echo "parted not available." ;;
+      parted_live_disk) echo "Operation not allowed on the live USB disk." ;;
+      parted_need_umount) echo "Unmount the partition first." ;;
+      parted_ok) echo "Operation completed." ;;
+      parted_fail) echo "Operation failed (code %s)." ;;
+      parted_cancel) echo "Operation cancelled." ;;
+    esac
+  else
+    case "$1" in
+      title)         echo "CONTROLLO DISCHI" ;;
+      no_disks)      echo "Nessun disco trovato." ;;
+      select)        echo "SELEZIONA" ;;
+      smart)         echo "S.M.A.R.T." ;;
+      wear)          echo "Usura" ;;
+      power_on)      echo "Accensioni" ;;
+      temp)          echo "Temp" ;;
+      health)        echo "Salute" ;;
+      interface)     echo "Interfaccia" ;;
+      unknown)       echo "N/D" ;;
+      unsupported)   echo "Non supportato" ;;
+      passed)        echo "OK" ;;
+      failed)        echo "FALLITO" ;;
+      good)          echo "BUONO" ;;
+      warning)       echo "ATTENZIONE" ;;
+      critical)      echo "CRITICO" ;;
+      prompt)        echo "Scelta (numero=disco, lettera=partizione, N, D, I, Q per uscire): " ;;
+      part_ops_create) echo "Crea partizione" ;;
+      invalid)       echo "Scelta non valida." ;;
+      unmount_action) echo "SMONTA VOLUME IN SICUREZZA" ;;
+      unmount_title) echo "SMONTA VOLUME" ;;
+      unmount_none)  echo "Nessun volume montato in /media." ;;
+      unmount_select) echo "SELEZIONA VOLUME" ;;
+      unmount_confirm) echo "Smontare %s? [s/n]: " ;;
+      unmount_ok)    echo "Volume smontato. Puoi scollegare il disco." ;;
+      unmount_busy)  echo "Volume occupato. Chiudi mc o altri programmi e riprova." ;;
+      unmount_fail)  echo "Smontaggio non riuscito." ;;
+      unmount_cancel) echo "Operazione annullata." ;;
+      press_key)     echo "Premi un tasto per tornare..." ;;
+      ntfs_force_action) echo "MONTA NTFS FORZATO (Windows ibernato)" ;;
+      ntfs_force_title) echo "MONTA NTFS FORZATO" ;;
+      ntfs_force_intro) echo "Se Windows (avvio rapido/ibernazione) blocca la scrittura, rimuove il file di ibernazione e monta in lettura/scrittura. La sessione Windows aperta andra persa; i file sul disco restano." ;;
+      ntfs_force_none) echo "Nessuna partizione NTFS trovata." ;;
+      ntfs_force_select) echo "SELEZIONA PARTIZIONE NTFS" ;;
+      ntfs_force_confirm) echo "Montare forzatamente %s in lettura/scrittura? [s/n]: " ;;
+      ntfs_force_ok) echo "NTFS montato in lettura/scrittura su %s" ;;
+      ntfs_force_fail) echo "Montaggio forzato non riuscito." ;;
+      ntfs_force_cancel) echo "Operazione annullata." ;;
+      ntfs_already_rw) echo "Partizione gia montata in lettura/scrittura." ;;
+      ntfs_state_ro) echo "sola lettura" ;;
+      ntfs_state_rw) echo "lettura/scrittura" ;;
+      ntfs_state_unmounted) echo "non montata" ;;
+      mount_action) echo "MONTA PARTIZIONE" ;;
+      mount_title) echo "MONTA PARTIZIONE" ;;
+      mount_intro) echo "Monta una partizione non montata sul disco attivo (device, non cartella /media)." ;;
+      mount_none) echo "Nessuna partizione montabile sul disco attivo." ;;
+      mount_select) echo "SELEZIONA PARTIZIONE" ;;
+      mount_ok) echo "Montata su %s" ;;
+      mount_fail) echo "Montaggio non riuscito. Per NTFS ibernato usa T (forzato)." ;;
+      mount_cancel) echo "Operazione annullata." ;;
+      mount_already) echo "Gia montata." ;;
+      mount_status_mounted) echo "montata" ;;
+      mount_status_unmounted) echo "non montata" ;;
+      mount_label_mounted) echo "MONTATO" ;;
+      mount_label_unmounted) echo "NON MONTATO" ;;
+      disk_type) echo "Tipo disco" ;;
+      partition_scheme) echo "Schema partizioni" ;;
+      partitions_header) echo "Partizioni" ;;
+      unallocated) echo "Spazio non allocato" ;;
+      part_live) echo "LIVE (nessuna operazione)" ;;
+      part_no_ops) echo "Nessuna operazione sullo spazio non allocato." ;;
+      part_no_mount_ops) echo "Nessuna operazione di mount per questa partizione." ;;
+      part_ops_title) echo "OPERAZIONI PARTIZIONE" ;;
+      part_ops_mount) echo "Monta" ;;
+      part_ops_unmount) echo "Smonta" ;;
+      part_ops_force_ntfs) echo "Monta NTFS forzato (Windows ibernato)" ;;
+      part_ops_repair) echo "(chkdsk /f /r)" ;;
+      part_ops_repair_quick) echo "(chkdsk /f)" ;;
+      part_ops_back) echo "Indietro" ;;
+      part_ops_help) echo "M=monta U=smonta T=forzato NTFS  F=chkdsk /f  R=chkdsk /f /r  X=cancella  W=formatta  Q=indietro" ;;
+      part_ops_prompt) echo "Scelta (Q per tornare indietro): " ;;
+      select_help) echo "Numero=disco | lettera=operazioni partizione | N=nuova partizione | D=operazioni disco | I=S.M.A.R.T. | Q=esci" ;;
+      submenu_title) echo "DETTAGLI DISCO (S.M.A.R.T.)" ;;
+      submenu_wait)  echo "Sottomenu in preparazione. Premi un tasto..." ;;
+      part_table)    echo "TABELLA PARTIZIONI (parted)" ;;
+      part_lsblk)    echo "PARTIZIONI (lsblk -f)" ;;
+      model)         echo "Modello" ;;
+      size)          echo "Dimensione" ;;
+      active_disk)   echo "DISCO ATTIVO" ;;
+      no_disk_selected) echo "Nessun disco selezionato — scegli prima un numero." ;;
+      active_commands) echo "Lettera=operazioni partizione | N=nuova partizione | D=tabella partizioni (distruttive)" ;;
+      need_disk)     echo "Seleziona prima un disco con un numero." ;;
+      unmount_none_disk) echo "Nessun volume montato su questo disco in /media." ;;
+      mount_none_disk) echo "Nessuna partizione montabile su questo disco." ;;
+      ntfs_force_none_disk) echo "Nessuna partizione NTFS su questo disco." ;;
+      repair_title) echo "RIPARA FILESYSTEM" ;;
+      repair_intro) echo "Controlla e ripara la partizione smontata. Su dischi grandi puo richiedere molto tempo." ;;
+      repair_intro_ntfs) echo "NTFS completa: ntfsfix poi badblocks (chkdsk /f + /r)." ;;
+      repair_intro_ntfs_quick) echo "NTFS rapida: solo ntfsfix (chkdsk /f), senza scansione settori." ;;
+      repair_intro_linux) echo "Linux: e2fsck/xfs_repair/btrfs check con riparazione automatica dove supportata." ;;
+      repair_tool) echo "Strumento" ;;
+      repair_confirm) echo "Riparazione completa %s? Puo richiedere molto tempo. [s/n]: " ;;
+      repair_confirm_quick) echo "Riparazione rapida %s (solo ntfsfix)? [s/n]: " ;;
+      repair_need_unmount) echo "Smonta la partizione prima di riparare." ;;
+      repair_not_available) echo "Non disponibile, smonta prima la partizione." ;;
+      repair_unsupported) echo "Riparazione non supportata per questa partizione." ;;
+      repair_running) echo "Riparazione in corso..." ;;
+      repair_ok) echo "Riparazione completata." ;;
+      repair_fail) echo "Riparazione non riuscita (codice %s)." ;;
+      repair_cancel) echo "Operazione annullata." ;;
+      disk_ops_title) echo "OPERAZIONI DISCO" ;;
+      disk_ops_intro) echo "Operazioni distruttive — tutti i dati sul disco possono andare persi." ;;
+      disk_ops_create_gpt) echo "Crea tabella partizioni GPT" ;;
+      disk_ops_create_mbr) echo "Crea tabella partizioni MBR (msdos)" ;;
+      disk_ops_delete_table) echo "Cancella tabella partizioni (wipe disco)" ;;
+      disk_ops_create_part) echo "Crea partizione (tutto lo spazio libero)" ;;
+      disk_ops_help) echo "1=GPT 2=MBR 3=cancella tabella  Q=indietro" ;;
+      disk_ops_prompt) echo "Scelta: " ;;
+      part_ops_delete) echo "Cancella partizione" ;;
+      part_ops_format) echo "Formatta partizione" ;;
+      format_title) echo "FORMATTA PARTIZIONE" ;;
+      format_select) echo "Filesystem: 1=NTFS 2=ext4 3=FAT32 4=exFAT" ;;
+      format_prompt) echo "Scelta: " ;;
+      danger_warn) echo "ATTENZIONE: operazione distruttiva su %s" ;;
+      danger_confirm1) echo "Continuare? I dati possono essere PERSI. [s/n]: " ;;
+      danger_confirm2) echo "Vuoi VERAMENTE procedere? [s/n]: " ;;
+      parted_no_parted) echo "parted non disponibile." ;;
+      parted_live_disk) echo "Operazione non consentita sul disco live USB." ;;
+      parted_need_umount) echo "Smonta prima la partizione." ;;
+      parted_ok) echo "Operazione completata." ;;
+      parted_fail) echo "Operazione non riuscita (codice %s)." ;;
+      parted_cancel) echo "Operazione annullata." ;;
+    esac
+  fi
+}
+
+quelo_disk_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    IFS= read -r -n 1 -s key
+  fi
+
+  if [[ "${key}" == [qQ] ]]; then
+    echo ""
+    return 1
+  fi
+
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { echo ""; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+
+  echo ""
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_disk_read_part_key() {
+  quelo_disk_read_choice
+}
+
+quelo_disk_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || read -r -n 1 -s _
+}
+
+quelo_disk_live_dev() {
+  quelo_live_disk
+}
+
+quelo_disk_collect() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev
+  live_dev="$(quelo_disk_live_dev)"
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* ]] && continue
+    [[ "${dev}" == /dev/sr* ]] && continue
+    [[ "${dev}" == /dev/loop* ]] && continue
+    [[ "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+
+    local dtype size model vendor tran
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    DISK_MODELS+=("${model:-$(quelo_disk_t unknown)}")
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+DISK_LETTERS=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+PART_LETTERS=()
+PART_DEVS=()
+PART_SIZES=()
+PART_FSTYPES=()
+PART_LABELS=()
+PART_MOUNTED=()
+PART_MPOINTS=()
+PART_KIND=()
+PART_RO=()
+DISK_SCHEME=""
+DISK_SELECTED_IDX=-1
+
+quelo_disk_part_letter() {
+  echo "${DISK_LETTERS[$1]:-?}"
+}
+
+quelo_disk_disk_num() {
+  echo $(( $1 + 1 ))
+}
+
+quelo_disk_part_already_listed() {
+  local dev="$1" i
+  for i in "${!PART_DEVS[@]}"; do
+    [[ "${PART_DEVS[$i]}" == "${dev}" ]] && return 0
+  done
+  return 1
+}
+
+quelo_disk_partition_belongs() {
+  quelo_partition_belongs_disk "$1" "$2"
+}
+
+quelo_disk_guess_selected() {
+  local i mp src disk live_dev part score best_idx=-1 best_score=-1
+
+  ((DISK_SELECTED_IDX >= 0)) && return 0
+  ((${#DISK_DEVS[@]} == 0)) && return 0
+
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  if ((${#DISK_DEVS[@]} == 1)); then
+    if [[ -z "${live_dev}" || "${DISK_DEVS[0]}" != "${live_dev}" ]]; then
+      quelo_disk_save_selected 0
+    fi
+    return 0
+  fi
+
+  for i in "${!DISK_DEVS[@]}"; do
+    [[ -n "${live_dev}" && "${DISK_DEVS[$i]}" == "${live_dev}" ]] && continue
+    score=0
+    [[ "${DISK_TRANS[$i],,}" == "nvme" ]] && score=$((score + 10))
+    [[ "${DISK_TRANS[$i],,}" == "sata" ]] && score=$((score + 5))
+    while read -r part; do
+      [[ -n "${part}" ]] || continue
+      quelo_fs_is_ntfs "${part}" && score=$((score + 20))
+    done < <(lsblk -ln -p -o NAME,TYPE "${DISK_DEVS[$i]}" 2>/dev/null | awk '$2=="part" {print $1}')
+    if ((score > best_score)); then
+      best_score="${score}"
+      best_idx="${i}"
+    fi
+  done
+
+  if ((best_idx >= 0)); then
+    quelo_disk_save_selected "${best_idx}"
+    return 0
+  fi
+
+  for mp in /media/*/; do
+    [[ -d "${mp}" ]] || continue
+    mp="${mp%/}"
+    mountpoint -q "${mp}" 2>/dev/null || continue
+    src="$(quelo_fs_mount_source "${mp}")" || src=""
+    [[ -n "${src}" ]] || continue
+    disk="$(quelo_partition_disk "${src}")"
+    [[ -n "${live_dev}" && "${disk}" == "${live_dev}" ]] && continue
+    for i in "${!DISK_DEVS[@]}"; do
+      if [[ "${DISK_DEVS[$i]}" == "${disk}" ]]; then
+        quelo_disk_save_selected "${i}"
+        return 0
+      fi
+    done
+  done
+}
+
+quelo_disk_restore_selected() {
+  local saved saved_idx i
+
+  DISK_SELECTED_IDX=-1
+  [[ -f /run/quelo-selected-disk-index ]] || return 0
+  saved_idx="$(< /run/quelo-selected-disk-index)" || return 0
+  [[ "${saved_idx}" =~ ^[0-9]+$ ]] || return 0
+  ((saved_idx >= 0 && saved_idx < ${#DISK_DEVS[@]})) || return 0
+  if [[ -f /run/quelo-selected-disk ]]; then
+    saved="$(< /run/quelo-selected-disk)"
+    [[ "${DISK_DEVS[$saved_idx]}" == "${saved}" ]] || return 0
+  fi
+  DISK_SELECTED_IDX="${saved_idx}"
+}
+
+quelo_disk_save_selected() {
+  local idx="$1"
+
+  if ((idx < 0 || idx >= ${#DISK_DEVS[@]})); then
+    DISK_SELECTED_IDX=-1
+    rm -f /run/quelo-selected-disk /run/quelo-selected-disk-index
+    return 0
+  fi
+
+  DISK_SELECTED_IDX="${idx}"
+  echo "${DISK_DEVS[$idx]}" > /run/quelo-selected-disk
+  echo "${idx}" > /run/quelo-selected-disk-index
+}
+
+quelo_disk_print_active_banner() {
+  local idx="$1"
+
+  if ((idx < 0 || idx >= ${#DISK_DEVS[@]})); then
+    printf '  %b[--]%b %s\n' "${C_AMBER}" "${C_RESET}" "$(quelo_disk_t no_disk_selected)"
+    return 0
+  fi
+
+  printf '  %b[*] %s:%b %b%d)%b %s  %s  %s\n' \
+    "${C_GREEN_BOLD}" "$(quelo_disk_t active_disk)" "${C_RESET}" \
+    "${C_GREEN_BOLD}" "$(quelo_disk_disk_num "${idx}")" "${C_RESET}" \
+    "${DISK_DEVS[$idx]}" "${DISK_SIZES[$idx]}" "$(quelo_disk_model_line "${idx}")"
+  printf '      %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t active_commands)" "${C_RESET}"
+}
+
+quelo_disk_iface() {
+  case "${1,,}" in
+    nvme) echo "NVMe" ;;
+    sata) echo "SATA" ;;
+    usb)  echo "USB" ;;
+    ide)  echo "IDE" ;;
+    sas)  echo "SAS" ;;
+    scsi) echo "SCSI" ;;
+    ata)  echo "ATA" ;;
+    ?)    echo "$(quelo_disk_t unknown)" ;;
+    *)    echo "${1}" ;;
+  esac
+}
+
+quelo_disk_model_line() {
+  local idx="$1"
+  if [[ -n "${DISK_VENDORS[$idx]}" && "${DISK_VENDORS[$idx]}" != "${DISK_MODELS[$idx]}" ]]; then
+    echo "${DISK_VENDORS[$idx]} ${DISK_MODELS[$idx]}"
+  else
+    echo "${DISK_MODELS[$idx]}"
+  fi
+}
+
+quelo_disk_smart_raw() {
+  local dev="$1"
+  local out cw
+
+  if [[ "${dev}" == /dev/nvme* ]]; then
+    out="$(nvme smart-log "${dev}" 2>/dev/null)" || { echo "unknown"; return; }
+    cw="$(awk -F: '/critical_warning/ {gsub(/ /,"",$2); print $2; exit}' <<<"${out}")"
+    [[ "${cw}" == "0" ]] && echo "passed" || echo "failed"
+    return
+  fi
+
+  if [[ "$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null)" == "usb" ]]; then
+    echo "unsupported"
+    return
+  fi
+
+  out="$(smartctl -H "${dev}" 2>/dev/null)" || { echo "unknown"; return; }
+  if grep -qi "PASSED" <<<"${out}"; then
+    echo "passed"
+  elif grep -qi "FAIL" <<<"${out}"; then
+    echo "failed"
+  else
+    echo "unknown"
+  fi
+}
+
+quelo_disk_smart_status() {
+  case "$(quelo_disk_smart_raw "$1")" in
+    passed)      echo "$(quelo_disk_t passed)" ;;
+    failed)      echo "$(quelo_disk_t failed)" ;;
+    unsupported) echo "$(quelo_disk_t unsupported)" ;;
+    *)           echo "$(quelo_disk_t unknown)" ;;
+  esac
+}
+
+quelo_disk_wear_pct() {
+  local dev="$1"
+  local val out
+
+  if [[ "${dev}" == /dev/nvme* ]]; then
+    val="$(nvme smart-log "${dev}" 2>/dev/null | awk -F: '/percentage_used/ {gsub(/[^0-9]/,"",$2); print $2; exit}')"
+    [[ -n "${val}" && "${val}" =~ ^[0-9]+$ ]] && { echo "${val}"; return; }
+  fi
+
+  out="$(smartctl -A "${dev}" 2>/dev/null)"
+  val="$(awk '/Media_Wearout_Indicator/ {print $4; exit}' <<<"${out}")"
+  if [[ -n "${val}" && "${val}" =~ ^[0-9]+$ ]]; then
+    echo "$((100 - val))"
+    return
+  fi
+
+  val="$(awk '/Wear_Leveling_Count|Percentage Used/ {print $4; exit}' <<<"${out}")"
+  [[ -n "${val}" && "${val}" =~ ^[0-9]+$ ]] && { echo "${val}"; return; }
+  echo ""
+}
+
+quelo_disk_wear() {
+  local pct
+  pct="$(quelo_disk_wear_pct "$1")"
+  [[ -n "${pct}" ]] && echo "${pct}%" || echo "$(quelo_disk_t unknown)"
+}
+
+quelo_disk_power_on() {
+  local dev="$1"
+  local hours days out
+
+  if [[ "${dev}" == /dev/nvme* ]]; then
+    out="$(nvme smart-log "${dev}" 2>/dev/null)"
+    hours="$(awk -F: '/power_on_hours/ {gsub(/[^0-9]/,"",$2); print $2; exit}' <<<"${out}")"
+  else
+    out="$(smartctl -A "${dev}" 2>/dev/null)"
+    hours="$(awk '/Power_On_Hours/ {gsub(/[^0-9]/,"",$NF); print $NF; exit}' <<<"${out}")"
+  fi
+
+  [[ -z "${hours}" || ! "${hours}" =~ ^[0-9]+$ ]] && { echo "$(quelo_disk_t unknown)"; return; }
+  days=$((hours / 24))
+
+  if quelo_disk_ui_is_en; then
+    if ((days < 1)); then
+      echo "${hours}h (<1 day)"
+    else
+      echo "${hours}h (about ${days} days)"
+    fi
+  else
+    if ((days < 1)); then
+      echo "${hours}h (<1 giorno)"
+    else
+      echo "${hours}h (circa ${days} giorni)"
+    fi
+  fi
+}
+
+quelo_disk_temp_value() {
+  local dev="$1"
+  local out t
+
+  if [[ "${dev}" == /dev/nvme* ]]; then
+    out="$(nvme smart-log "${dev}" 2>/dev/null)"
+    t="$(awk -F: '$1 ~ /^[[:space:]]*temperature[[:space:]]*$/ {
+      if (match($2, /[0-9]+/)) { print substr($2, RSTART, RLENGTH); exit }
+    }' <<<"${out}")"
+  else
+    out="$(smartctl -A "${dev}" 2>/dev/null)"
+    t="$(awk '/Temperature_Celsius/ {gsub(/[^0-9]/,"",$10); print $10; exit}' <<<"${out}")"
+    [[ -z "${t}" ]] && t="$(awk '/Current Drive Temperature/ {print $NF; exit}' <<<"${out}" | tr -cd '0-9')"
+  fi
+
+  if [[ -n "${t}" && "${t}" =~ ^[0-9]+$ && "${t}" -ge 20 && "${t}" -le 90 ]]; then
+    echo "${t}"
+  else
+    echo ""
+  fi
+}
+
+quelo_disk_temp() {
+  local t
+  t="$(quelo_disk_temp_value "$1")"
+  [[ -n "${t}" ]] && echo "${t} C" || echo "$(quelo_disk_t unknown)"
+}
+
+quelo_disk_health() {
+  local dev="$1"
+  local smart wear temp
+
+  smart="$(quelo_disk_smart_raw "${dev}")"
+  wear="$(quelo_disk_wear_pct "${dev}")"
+  temp="$(quelo_disk_temp_value "${dev}")"
+
+  if [[ "${smart}" == "failed" ]]; then
+    echo "$(quelo_disk_t critical)"
+    return
+  fi
+
+  if [[ -n "${wear}" && "${wear}" =~ ^[0-9]+$ && "${wear}" -ge 90 ]]; then
+    echo "$(quelo_disk_t critical)"
+    return
+  fi
+
+  if [[ -n "${temp}" && "${temp}" -ge 70 ]]; then
+    echo "$(quelo_disk_t critical)"
+    return
+  fi
+
+  if [[ "${smart}" == "unknown" || "${smart}" == "unsupported" ]]; then
+    echo "$(quelo_disk_t unknown)"
+    return
+  fi
+
+  if [[ -n "${wear}" && "${wear}" -ge 70 ]]; then
+    echo "$(quelo_disk_t warning)"
+    return
+  fi
+
+  if [[ -n "${temp}" && "${temp}" -ge 55 ]]; then
+    echo "$(quelo_disk_t warning)"
+    return
+  fi
+
+  echo "$(quelo_disk_t good)"
+}
+
+quelo_disk_partitions_on_disk() {
+  local disk="$1" part size
+
+  [[ -n "${disk}" ]] || return 0
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    size="$(lsblk -no SIZE "${part}" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    [[ -n "${size}" ]] || size="?"
+    printf '%s %s\n' "${part}" "${size}"
+  done < <(quelo_disk_enum_partitions "${disk}")
+}
+
+quelo_disk_resolve_fstype() {
+  local part="$1"
+  local fstype
+
+  fstype="$(quelo_fs_detect "${part}")" || fstype=""
+  if [[ -z "${fstype}" ]] && quelo_fs_is_ntfs "${part}"; then
+    fstype="ntfs"
+  fi
+  echo "${fstype}"
+}
+
+quelo_disk_is_live_part() {
+  local part="$1"
+  quelo_live_is_medium_partition "${part}" && return 0
+  quelo_live_is_on_disk "${part}"
+}
+
+quelo_disk_human_size() {
+  local raw="$1"
+
+  raw="${raw%B}"
+  raw="${raw%s}"
+  if [[ "${raw}" =~ ^[0-9]+$ ]] && command -v numfmt >/dev/null 2>&1; then
+    numfmt --to=iec-i --suffix=B "${raw}" 2>/dev/null || echo "${raw}B"
+  else
+    echo "${raw}"
+  fi
+}
+
+quelo_disk_partition_scheme() {
+  local disk="$1" scheme line
+
+  DISK_SCHEME="$(quelo_disk_t unknown)"
+  command -v parted >/dev/null 2>&1 || return 0
+
+  line="$(parted -s "${disk}" print 2>/dev/null | awk -F': ' '/^Partition Table:/ {print $2; exit}')"
+  scheme="${line,,}"
+  case "${scheme}" in
+    gpt) DISK_SCHEME="GPT" ;;
+    msdos) DISK_SCHEME="MBR (msdos)" ;;
+    loop) DISK_SCHEME="loop" ;;
+    "") ;;
+    *) DISK_SCHEME="${line}" ;;
+  esac
+
+  if [[ "${DISK_SCHEME}" == "$(quelo_disk_t unknown)" ]]; then
+    scheme="$(lsblk -d -no PTTYPE "${disk}" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]')"
+    case "${scheme}" in
+      gpt) DISK_SCHEME="GPT" ;;
+      dos) DISK_SCHEME="MBR (msdos)" ;;
+    esac
+  fi
+}
+
+quelo_disk_part_mount_info() {
+  local part="$1" mp opts resolved
+
+  _PART_MPOINT=""
+  _PART_MOUNTED=0
+  _PART_RO=0
+  [[ -n "${part}" && -b "${part}" ]] || return 0
+
+  resolved="$(quelo_partition_resolve "${part}" 2>/dev/null)" || resolved="${part}"
+  mp="$(findmnt -n -o TARGET --source "${resolved}" 2>/dev/null)" || mp=""
+  if [[ -z "${mp}" ]]; then
+    mp="$(findmnt -n -o TARGET "${resolved}" 2>/dev/null)" || mp=""
+  fi
+  if [[ -z "${mp}" && "${resolved}" != "${part}" ]]; then
+    mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+    [[ -z "${mp}" ]] && mp="$(findmnt -n -o TARGET "${part}" 2>/dev/null)" || mp=""
+  fi
+  if [[ -n "${mp}" ]]; then
+    _PART_MOUNTED=1
+    _PART_MPOINT="${mp}"
+    opts="$(findmnt -n -o OPTIONS --source "${resolved}" 2>/dev/null)"
+    [[ -z "${opts}" ]] && opts="$(findmnt -n -o OPTIONS "${resolved}" 2>/dev/null)"
+    [[ -z "${opts}" ]] && opts="$(findmnt -n -o OPTIONS --source "${part}" 2>/dev/null)"
+    [[ -z "${opts}" ]] && opts="$(findmnt -n -o OPTIONS "${part}" 2>/dev/null)"
+    [[ "${opts}" == *ro* && "${opts}" != *rw* ]] && _PART_RO=1
+  fi
+}
+
+quelo_disk_part_fstype() {
+  local part="$1" fstype
+
+  fstype="$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1 | tr -d '[:space:]')"
+  fstype="$(quelo_fs_normalize_type "${fstype}")"
+  if [[ -z "${fstype}" ]]; then
+    fstype="$(quelo_disk_resolve_fstype "${part}")"
+  fi
+  if [[ -z "${fstype}" ]] && quelo_fs_is_ntfs "${part}"; then
+    fstype="ntfs"
+  fi
+  echo "${fstype}"
+}
+
+quelo_disk_collect_layout_partitions() {
+  local disk="$1" part size fstype label slot=0
+
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    [[ -b "${part}" ]] || continue
+    quelo_disk_part_already_listed "${part}" && continue
+    size="$(lsblk -no SIZE "${part}" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    [[ -n "${size}" ]] || size="?"
+    fstype="$(quelo_disk_part_fstype "${part}")"
+    label="$(blkid -o value -s LABEL "${part}" 2>/dev/null)"
+    [[ -z "${label}" ]] && label="$(lsblk -no PARTLABEL "${part}" 2>/dev/null | head -1)"
+
+    quelo_disk_part_mount_info "${part}"
+
+    if quelo_disk_is_live_part "${part}"; then
+      PART_KIND+=("live")
+    else
+      PART_KIND+=("part")
+    fi
+    PART_LETTERS+=("$(quelo_disk_part_letter "${slot}")")
+    PART_DEVS+=("${part}")
+    PART_SIZES+=("${size}")
+    PART_FSTYPES+=("${fstype:--}")
+    PART_LABELS+=("${label:-}")
+    PART_MOUNTED+=("${_PART_MOUNTED}")
+    PART_MPOINTS+=("${_PART_MPOINT}")
+    PART_RO+=("${_PART_RO}")
+    ((slot++))
+  done < <(quelo_disk_enum_partitions "${disk}")
+}
+
+quelo_disk_collect_layout_free_space() {
+  local disk="$1" line minor _start _end size human
+
+  command -v parted >/dev/null 2>&1 || return 0
+
+  while IFS= read -r line; do
+    [[ "${line}" == *:* ]] || continue
+    IFS=: read -r minor _start _end size _fs _name _flags <<<"${line}"
+    [[ -n "${minor}" ]] && continue
+    [[ "${size}" =~ ^[0-9]+B?$ ]] || continue
+    human="$(quelo_disk_human_size "${size}")"
+    PART_LETTERS+=("")
+    PART_DEVS+=("")
+    PART_SIZES+=("${human}")
+    PART_FSTYPES+=("-")
+    PART_LABELS+=("")
+    PART_MOUNTED+=(0)
+    PART_MPOINTS+=("")
+    PART_KIND+=("free")
+    PART_RO+=(0)
+  done < <(parted -s -m "${disk}" unit B print free 2>/dev/null | tail -n +2)
+}
+
+quelo_disk_collect_layout() {
+  local disk="$1"
+
+  PART_LETTERS=()
+  PART_DEVS=()
+  PART_SIZES=()
+  PART_FSTYPES=()
+  PART_LABELS=()
+  PART_MOUNTED=()
+  PART_MPOINTS=()
+  PART_KIND=()
+  PART_RO=()
+
+  [[ -n "${disk}" ]] || return 0
+
+  quelo_block_disk_probe "${disk}"
+  quelo_disk_partition_scheme "${disk}"
+  quelo_disk_collect_layout_partitions "${disk}"
+  quelo_disk_collect_layout_free_space "${disk}"
+}
+
+quelo_disk_part_mount_label() {
+  local idx="$1"
+
+  if [[ "${PART_KIND[$idx]}" == "live" ]]; then
+    echo "$(quelo_disk_t part_live)"
+    return 0
+  fi
+  if [[ "${PART_MOUNTED[$idx]}" == 1 ]]; then
+    if [[ "${PART_RO[$idx]}" == 1 ]]; then
+      if quelo_disk_ui_is_en; then
+        echo "MOUNTED (ro) @ ${PART_MPOINTS[$idx]}"
+      else
+        echo "MONTATO (sola lettura) @ ${PART_MPOINTS[$idx]}"
+      fi
+    else
+      echo "$(quelo_disk_t mount_label_mounted) @ ${PART_MPOINTS[$idx]}"
+    fi
+  else
+    echo "$(quelo_disk_t mount_label_unmounted)"
+  fi
+}
+
+quelo_disk_print_layout() {
+  local idx disk_i i label_txt
+
+  ((DISK_SELECTED_IDX < 0)) && return 0
+  disk_i="${DISK_SELECTED_IDX}"
+  quelo_disk_collect_layout "${DISK_DEVS[$disk_i]}"
+
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t disk_type)" "${C_RESET}" \
+    "$(quelo_disk_iface "${DISK_TRANS[$disk_i]}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t partition_scheme)" "${C_RESET}" \
+    "${DISK_SCHEME}"
+  echo ""
+  printf '  %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t partitions_header)" "${C_RESET}"
+
+  if ((${#PART_KIND[@]} == 0)); then
+    echo "    $(quelo_disk_t unknown)"
+    echo ""
+    return 0
+  fi
+
+  for i in "${!PART_KIND[@]}"; do
+    if [[ "${PART_KIND[$i]}" == "free" ]]; then
+      printf '      %b%s%b  %s\n' \
+        "${C_AMBER}" "$(quelo_disk_t unallocated)" "${C_RESET}" \
+        "${PART_SIZES[$i]}"
+      continue
+    fi
+
+    label_txt="${PART_LABELS[$i]}"
+    [[ -n "${label_txt}" ]] && label_txt="  ${label_txt}"
+    printf '    %s) %s  %s  %s%s\n' \
+      "${PART_LETTERS[$i]}" \
+      "${PART_DEVS[$i]}" \
+      "${PART_SIZES[$i]}" \
+      "${PART_FSTYPES[$i]}" \
+      "${label_txt}"
+    printf '        [%s]\n' "$(quelo_disk_part_mount_label "${i}")"
+  done
+  echo ""
+}
+
+quelo_disk_find_part_by_letter() {
+  local letter="$1" i
+
+  letter="${letter,,}"
+  for i in "${!PART_LETTERS[@]}"; do
+    [[ "${PART_KIND[$i]}" == "free" ]] && continue
+    [[ "${PART_LETTERS[$i]}" == "${letter}" ]] && { echo "${i}"; return 0; }
+  done
+  return 1
+}
+
+quelo_disk_part_can_mount() {
+  local idx="$1" fstype
+
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  [[ "${PART_MOUNTED[$idx]}" == 0 ]] || return 1
+  fstype="${PART_FSTYPES[$idx]}"
+  [[ "${fstype}" != "-" ]] || return 1
+  ! quelo_fs_should_skip_mount "${fstype}"
+}
+
+quelo_disk_part_can_unmount() {
+  local idx="$1"
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  [[ "${PART_MOUNTED[$idx]}" == 1 ]]
+}
+
+quelo_disk_part_can_force_ntfs() {
+  local idx="$1"
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  quelo_fs_is_ntfs "${PART_DEVS[$idx]}" || return 1
+  [[ "${PART_MOUNTED[$idx]}" == 0 || "${PART_RO[$idx]}" == 1 ]]
+}
+
+quelo_disk_part_resolve_fstype() {
+  local idx="$1" fstype part
+
+  part="${PART_DEVS[$idx]}"
+  fstype="$(quelo_fs_normalize_type "${PART_FSTYPES[$idx]}")"
+  if [[ -z "${fstype}" || "${fstype}" == "-" ]]; then
+    fstype="$(quelo_disk_part_fstype "${part}")"
+  fi
+  echo "${fstype}"
+}
+
+quelo_disk_part_show_repair_f() {
+  local idx="$1"
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  quelo_fs_is_ntfs "${PART_DEVS[$idx]}"
+}
+
+quelo_disk_part_show_repair_r() {
+  local idx="$1" fstype
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  fstype="$(quelo_disk_part_resolve_fstype "${idx}")"
+  quelo_fs_repair_supported "${fstype}"
+}
+
+quelo_disk_part_can_repair() {
+  local idx="$1" fstype part
+
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  [[ "${PART_MOUNTED[$idx]}" == 0 ]] || return 1
+  part="${PART_DEVS[$idx]}"
+  fstype="$(quelo_fs_normalize_type "${PART_FSTYPES[$idx]}")"
+  [[ "${fstype}" != "-" ]] || fstype="$(quelo_disk_part_fstype "${part}")"
+  quelo_fs_repair_supported "${fstype}"
+}
+
+quelo_disk_part_can_repair_quick() {
+  local idx="$1" part
+
+  quelo_disk_part_can_repair "${idx}" || return 1
+  part="${PART_DEVS[$idx]}"
+  quelo_fs_is_ntfs "${part}"
+}
+
+quelo_disk_part_can_delete() {
+  local idx="$1"
+  [[ "${PART_KIND[$idx]}" == "part" ]] || return 1
+  ! quelo_disk_is_live_part "${PART_DEVS[$idx]}"
+}
+
+quelo_disk_part_can_format() {
+  quelo_disk_part_can_delete "${1}"
+}
+
+quelo_disk_confirm_danger() {
+  local target="$1"
+
+  echo ""
+  printf '  %b%s%b\n' "${C_RED}" "$(printf "$(quelo_disk_t danger_warn)" "${target}")" "${C_RESET}"
+  echo ""
+  if ! quelo_disk_confirm_yn "$(quelo_disk_t danger_confirm1)"; then
+    return 1
+  fi
+  if ! quelo_disk_confirm_yn "$(quelo_disk_t danger_confirm2)"; then
+    return 1
+  fi
+  return 0
+}
+
+quelo_disk_parted_report() {
+  local rc="$1"
+
+  case "${rc}" in
+    0) echo "  $(quelo_disk_t parted_ok)" ;;
+    1) echo "  $(quelo_disk_t parted_no_parted)" ;;
+    2) echo "  $(quelo_disk_t parted_live_disk)" ;;
+    3) echo "  $(quelo_disk_t parted_need_umount)" ;;
+    *) printf '  %s\n' "$(printf "$(quelo_disk_t parted_fail)" "${rc}")" ;;
+  esac
+}
+
+quelo_disk_format_submenu() {
+  local part="$1" choice fstype rc desc
+
+  while true; do
+    clear
+    echo "=================================="
+    printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t format_title)" "${C_RESET}"
+    echo "=================================="
+    echo ""
+    printf '  %s\n' "${part}"
+    echo ""
+    printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t format_select)" "${C_RESET}"
+    echo ""
+    printf '  %b%s%b' "${C_AMBER}" "$(quelo_disk_t format_prompt)" "${C_RESET}"
+
+    if ! quelo_disk_read_choice; then
+      return 0
+    fi
+    choice="${DISK_CHOICE}"
+
+    case "${choice}" in
+      1) fstype="ntfs" ;;
+      2) fstype="ext4" ;;
+      3) fstype="vfat" ;;
+      4) fstype="exfat" ;;
+      *)
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        continue
+        ;;
+    esac
+
+    desc="${part} -> ${fstype}"
+    if ! quelo_disk_confirm_danger "${desc}"; then
+      echo "  $(quelo_disk_t parted_cancel)"
+      echo ""
+      echo "  $(quelo_disk_t press_key)"
+      quelo_disk_pause
+      return 0
+    fi
+
+    rc=0
+    quelo_parted_format_partition "${part}" "${fstype}" || rc=$?
+    quelo_disk_parted_report "${rc}"
+    echo ""
+    echo "  $(quelo_disk_t press_key)"
+    quelo_disk_pause
+    return 0
+  done
+}
+
+quelo_disk_disk_ops_menu() {
+  local disk_i="$1" disk choice rc desc
+
+  disk="${DISK_DEVS[$disk_i]}"
+
+  while true; do
+    quelo_disk_collect_layout "${disk}"
+
+    clear
+    echo "=================================="
+    printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t disk_ops_title)" "${C_RESET}"
+    echo "=================================="
+    echo ""
+    printf '  %s  %s\n' "${disk}" "${DISK_SIZES[$disk_i]}"
+    printf '  %b%s:%b %s\n' "${C_AMBER}" "$(quelo_disk_t partition_scheme)" "${C_RESET}" "${DISK_SCHEME}"
+    echo ""
+    printf '  %b%s%b\n' "${C_RED}" "$(quelo_disk_t disk_ops_intro)" "${C_RESET}"
+    echo ""
+    printf '  %b1)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t disk_ops_create_gpt)"
+    printf '  %b2)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t disk_ops_create_mbr)"
+    printf '  %b3)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t disk_ops_delete_table)"
+    echo ""
+    printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t disk_ops_help)" "${C_RESET}"
+    echo ""
+    printf '  %b%s%b' "${C_AMBER}" "$(quelo_disk_t disk_ops_prompt)" "${C_RESET}"
+
+    if ! quelo_disk_read_choice; then
+      return 0
+    fi
+    choice="${DISK_CHOICE}"
+
+    case "${choice}" in
+      1)
+        desc="$(printf '%s: GPT' "${disk}")"
+        if ! quelo_disk_confirm_danger "${desc}"; then
+          echo "  $(quelo_disk_t parted_cancel)"
+        else
+          rc=0
+          quelo_parted_create_table "${disk}" "gpt" || rc=$?
+          quelo_disk_parted_report "${rc}"
+        fi
+        echo ""
+        echo "  $(quelo_disk_t press_key)"
+        quelo_disk_pause
+        ;;
+      2)
+        desc="$(printf '%s: MBR (msdos)' "${disk}")"
+        if ! quelo_disk_confirm_danger "${desc}"; then
+          echo "  $(quelo_disk_t parted_cancel)"
+        else
+          rc=0
+          quelo_parted_create_table "${disk}" "msdos" || rc=$?
+          quelo_disk_parted_report "${rc}"
+        fi
+        echo ""
+        echo "  $(quelo_disk_t press_key)"
+        quelo_disk_pause
+        ;;
+      3)
+        desc="$(printf '%s: %s' "${disk}" "$(quelo_disk_t disk_ops_delete_table)")"
+        if ! quelo_disk_confirm_danger "${desc}"; then
+          echo "  $(quelo_disk_t parted_cancel)"
+        else
+          rc=0
+          quelo_parted_delete_table "${disk}" || rc=$?
+          quelo_disk_parted_report "${rc}"
+        fi
+        echo ""
+        echo "  $(quelo_disk_t press_key)"
+        quelo_disk_pause
+        ;;
+      *)
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+quelo_disk_repair_intro_for() {
+  local fstype="$1" mode="${2:-full}"
+  fstype="$(quelo_fs_normalize_type "${fstype}")"
+  if [[ "${fstype}" == "ntfs" ]]; then
+    if [[ "${mode}" == "quick" ]]; then
+      echo "$(quelo_disk_t repair_intro_ntfs_quick)"
+    else
+      echo "$(quelo_disk_t repair_intro_ntfs)"
+    fi
+  else
+    echo "$(quelo_disk_t repair_intro_linux)"
+  fi
+}
+
+quelo_disk_create_partition() {
+  local disk_i="$1" disk desc rc
+
+  disk="${DISK_DEVS[$disk_i]}"
+  desc="$(printf '%s: %s' "${disk}" "$(quelo_disk_t part_ops_create)")"
+  if ! quelo_disk_confirm_danger "${desc}"; then
+    echo "  $(quelo_disk_t parted_cancel)"
+    echo ""
+    echo "  $(quelo_disk_t press_key)"
+    quelo_disk_pause
+    return 0
+  fi
+
+  rc=0
+  quelo_parted_create_partition "${disk}" || rc=$?
+  quelo_disk_parted_report "${rc}"
+  echo ""
+  echo "  $(quelo_disk_t press_key)"
+  quelo_disk_pause
+  return "${rc}"
+}
+
+quelo_disk_repair_part() {
+  local part="$1" fstype="$2" mode="${3:-full}" prompt rc tool
+
+  if quelo_fs_repair_is_mounted "${part}"; then
+    echo "  $(quelo_disk_t repair_not_available)"
+    return 1
+  fi
+
+  fstype="$(quelo_fs_normalize_type "${fstype}")"
+  [[ "${fstype}" != "-" ]] || fstype="$(quelo_disk_part_fstype "${part}")"
+  if ! quelo_fs_repair_supported "${fstype}"; then
+    echo "  $(quelo_disk_t repair_unsupported)"
+    return 1
+  fi
+  if [[ "${mode}" == "quick" ]] && [[ "${fstype}" != "ntfs" ]]; then
+    echo "  $(quelo_disk_t repair_unsupported)"
+    return 1
+  fi
+
+  tool="$(quelo_fs_repair_tool_name "${fstype}" "${mode}")"
+  if [[ "${mode}" == "quick" ]]; then
+    prompt="$(printf "$(quelo_disk_t repair_confirm_quick)" "${part}")"
+  else
+    prompt="$(printf "$(quelo_disk_t repair_confirm)" "${part}")"
+  fi
+  if ! quelo_disk_confirm_yn "${prompt}"; then
+    echo "  $(quelo_disk_t repair_cancel)"
+    return 1
+  fi
+
+  clear
+  echo "=================================="
+  printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t repair_title)" "${C_RESET}"
+  echo "=================================="
+  echo ""
+  printf '  %s: %s\n' "${part}" "${fstype}"
+  printf '  %b%s:%b %s\n' "${C_AMBER}" "$(quelo_disk_t repair_tool)" "${C_RESET}" "${tool}"
+  echo ""
+  if [[ "${mode}" == "full" ]]; then
+    printf '  %s\n' "$(quelo_disk_t repair_intro)"
+  fi
+  printf '  %s\n' "$(quelo_disk_repair_intro_for "${fstype}" "${mode}")"
+  echo ""
+  echo "  $(quelo_disk_t repair_running)"
+  echo ""
+
+  quelo_console_quiet_off
+  rc=0
+  quelo_fs_repair_run "${part}" "${mode}" || rc=$?
+  quelo_console_quiet_on
+
+  echo ""
+  if ((rc == 0)); then
+    echo "  $(quelo_disk_t repair_ok)"
+  else
+    printf '  %s\n' "$(printf "$(quelo_disk_t repair_fail)" "${rc}")"
+  fi
+  return "${rc}"
+}
+
+quelo_disk_mount_part() {
+  local part="$1" target
+
+  target="$(/usr/local/bin/quelo-automount mount "${part##*/}" 2>/dev/null)" || target=""
+  if [[ -n "${target}" ]] && mountpoint -q "${target}" 2>/dev/null; then
+    printf '  %s\n' "$(printf "$(quelo_disk_t mount_ok)" "${target}")"
+    return 0
+  fi
+  echo "  $(quelo_disk_t mount_fail)"
+  return 1
+}
+
+quelo_disk_force_ntfs_part() {
+  local part="$1" prompt target
+
+  prompt="$(printf "$(quelo_disk_t ntfs_force_confirm)" "${part}")"
+  if ! quelo_disk_confirm_yn "${prompt}"; then
+    echo "  $(quelo_disk_t ntfs_force_cancel)"
+    return 1
+  fi
+
+  target="$(/usr/local/bin/quelo-automount force-ntfs "${part##*/}" 2>/dev/null)" || target=""
+  if [[ -n "${target}" && -d "${target}" ]] && mountpoint -q "${target}" 2>/dev/null; then
+    printf '  %s\n' "$(printf "$(quelo_disk_t ntfs_force_ok)" "${target}")"
+    return 0
+  fi
+  echo "  $(quelo_disk_t ntfs_force_fail)"
+  return 1
+}
+
+quelo_disk_unmount_part() {
+  local part="$1" mp prompt resolved
+
+  resolved="$(quelo_partition_resolve "${part}" 2>/dev/null)" || resolved="${part}"
+  mp="$(findmnt -n -o TARGET "${resolved}" 2>/dev/null)" || mp=""
+  [[ -n "${mp}" ]] || mp="$(findmnt -n -o TARGET "${part}" 2>/dev/null)" || mp=""
+  [[ -n "${mp}" ]] || { echo "  $(quelo_disk_t unmount_fail)"; return 1; }
+
+  prompt="$(printf "$(quelo_disk_t unmount_confirm)" "${mp}")"
+  if ! quelo_disk_confirm_yn "${prompt}"; then
+    echo "  $(quelo_disk_t unmount_cancel)"
+    return 1
+  fi
+
+  /usr/local/bin/quelo-automount remove "${resolved##*/}" 2>/dev/null || true
+
+  if findmnt -n "${resolved}" >/dev/null 2>&1 || findmnt -n "${part}" >/dev/null 2>&1; then
+    quelo_disk_unmount_one "${mp}" "${resolved}" || {
+      echo "  $(quelo_disk_t unmount_fail)"
+      return 1
+    }
+  fi
+
+  if findmnt -n "${resolved}" >/dev/null 2>&1 || findmnt -n "${part}" >/dev/null 2>&1; then
+    echo "  $(quelo_disk_t unmount_busy)"
+    return 1
+  fi
+
+  echo "  $(quelo_disk_t unmount_ok)"
+  return 0
+}
+
+quelo_disk_part_ops_menu() {
+  local pidx="$1" disk_i choice part rc
+
+  if [[ "${PART_KIND[$pidx]}" == "free" ]]; then
+    clear
+    echo "  $(quelo_disk_t part_no_ops)"
+    echo ""
+    echo "  $(quelo_disk_t press_key)"
+    quelo_disk_pause
+    return 0
+  fi
+
+  if [[ "${PART_KIND[$pidx]}" == "live" ]]; then
+    clear
+    echo "  $(quelo_disk_t part_live)"
+    echo ""
+    echo "  $(quelo_disk_t press_key)"
+    quelo_disk_pause
+    return 0
+  fi
+
+  disk_i="${DISK_SELECTED_IDX}"
+  part="${PART_DEVS[$pidx]}"
+
+  while true; do
+    quelo_disk_collect_layout "${DISK_DEVS[$disk_i]}"
+    part="${PART_DEVS[$pidx]}"
+
+    clear
+    echo "=================================="
+    printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t part_ops_title)" "${C_RESET}"
+    echo "=================================="
+    echo ""
+    printf '  %s) %s  %s  %s\n' \
+      "${PART_LETTERS[$pidx]}" "${part}" "${PART_SIZES[$pidx]}" "${PART_FSTYPES[$pidx]}"
+    printf '  [%s]\n' "$(quelo_disk_part_mount_label "${pidx}")"
+    echo ""
+
+    if quelo_disk_part_can_mount "${pidx}"; then
+      printf '  %bM)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t part_ops_mount)"
+    fi
+    if quelo_disk_part_can_unmount "${pidx}"; then
+      printf '  %bU)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t part_ops_unmount)"
+    fi
+    if quelo_disk_part_can_force_ntfs "${pidx}"; then
+      printf '  %bT)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t part_ops_force_ntfs)"
+    fi
+  if quelo_disk_part_show_repair_f "${pidx}"; then
+      printf '  %bF)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t part_ops_repair_quick)"
+    fi
+    if quelo_disk_part_show_repair_r "${pidx}"; then
+      printf '  %bR)%b %s\n' "${C_GREEN}" "${C_RESET}" "$(quelo_disk_t part_ops_repair)"
+    fi
+    if quelo_disk_part_can_delete "${pidx}"; then
+      printf '  %bX)%b %s\n' "${C_RED}" "${C_RESET}" "$(quelo_disk_t part_ops_delete)"
+    fi
+    if quelo_disk_part_can_format "${pidx}"; then
+      printf '  %bW)%b %s\n' "${C_RED}" "${C_RESET}" "$(quelo_disk_t part_ops_format)"
+    fi
+    if ! quelo_disk_part_can_mount "${pidx}" \
+      && ! quelo_disk_part_can_unmount "${pidx}" \
+      && ! quelo_disk_part_can_force_ntfs "${pidx}" \
+      && ! quelo_disk_part_show_repair_f "${pidx}" \
+      && ! quelo_disk_part_show_repair_r "${pidx}"; then
+      echo "  $(quelo_disk_t part_no_mount_ops)"
+    fi
+    echo ""
+    printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t part_ops_help)" "${C_RESET}"
+    echo ""
+    printf '  %b%s%b' "${C_AMBER}" "$(quelo_disk_t part_ops_prompt)" "${C_RESET}"
+
+    if ! quelo_disk_read_part_key; then
+      return 0
+    fi
+    choice="${DISK_CHOICE}"
+
+    case "${choice}" in
+      m|M)
+        if quelo_disk_part_can_mount "${pidx}"; then
+          quelo_disk_mount_part "${part}"
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        else
+          echo "  $(quelo_disk_t invalid)"
+          sleep 1
+        fi
+        ;;
+      u|U)
+        if quelo_disk_part_can_unmount "${pidx}"; then
+          quelo_disk_unmount_part "${part}"
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        else
+          echo "  $(quelo_disk_t invalid)"
+          sleep 1
+        fi
+        ;;
+      t|T)
+        if quelo_disk_part_can_force_ntfs "${pidx}"; then
+          quelo_disk_force_ntfs_part "${part}"
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        else
+          echo "  $(quelo_disk_t invalid)"
+          sleep 1
+        fi
+        ;;
+      r|R)
+        if [[ "${PART_MOUNTED[$pidx]}" == 1 ]]; then
+          echo "  $(quelo_disk_t repair_not_available)"
+          sleep 2
+        elif ! quelo_disk_part_show_repair_r "${pidx}"; then
+          echo "  $(quelo_disk_t repair_unsupported)"
+          sleep 2
+        else
+          quelo_disk_repair_part "${part}" "${PART_FSTYPES[$pidx]}" "full"
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        fi
+        ;;
+      f|F)
+        if [[ "${PART_MOUNTED[$pidx]}" == 1 ]]; then
+          echo "  $(quelo_disk_t repair_not_available)"
+          sleep 2
+        elif ! quelo_disk_part_show_repair_f "${pidx}"; then
+          echo "  $(quelo_disk_t repair_unsupported)"
+          sleep 2
+        else
+          quelo_disk_repair_part "${part}" "${PART_FSTYPES[$pidx]}" "quick"
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        fi
+        ;;
+      x|X)
+        if quelo_disk_part_can_delete "${pidx}"; then
+          desc="$(printf '%s: %s' "${part}" "$(quelo_disk_t part_ops_delete)")"
+          if ! quelo_disk_confirm_danger "${desc}"; then
+            echo "  $(quelo_disk_t parted_cancel)"
+          else
+            rc=0
+            quelo_parted_delete_partition "${DISK_DEVS[$disk_i]}" "${part}" || rc=$?
+            quelo_disk_parted_report "${rc}"
+            if ((rc == 0)); then
+              return 0
+            fi
+          fi
+          echo ""
+          echo "  $(quelo_disk_t press_key)"
+          quelo_disk_pause
+        else
+          echo "  $(quelo_disk_t invalid)"
+          sleep 1
+        fi
+        ;;
+      w|W)
+        if quelo_disk_part_can_format "${pidx}"; then
+          quelo_disk_format_submenu "${part}"
+          return 0
+        else
+          echo "  $(quelo_disk_t invalid)"
+          sleep 1
+        fi
+        ;;
+      *)
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+quelo_disk_list_screen() {
+  local i num
+
+  clear
+  echo "=================================="
+  printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t title)" "${C_RESET}"
+  echo "=================================="
+  echo ""
+
+  if ((${#DISK_DEVS[@]} == 0)); then
+    echo "  $(quelo_disk_t no_disks)"
+    echo ""
+  else
+    for i in "${!DISK_DEVS[@]}"; do
+      num="$(quelo_disk_disk_num "${i}")"
+      if ((i == DISK_SELECTED_IDX)); then
+        printf '  %b>> %d)%b %b%s%b  %s  %s\n' \
+          "${C_GREEN_BOLD}" "${num}" "${C_RESET}" \
+          "${C_GREEN_BOLD}" "${DISK_DEVS[$i]}" "${C_RESET}" \
+          "${DISK_SIZES[$i]}" "$(quelo_disk_model_line "${i}")"
+      else
+        printf '  %b%d)%b %s  %s  %s\n' \
+          "${C_GREEN}" "${num}" "${C_RESET}" \
+          "${DISK_DEVS[$i]}" "${DISK_SIZES[$i]}" "$(quelo_disk_model_line "${i}")"
+      fi
+      echo ""
+    done
+  fi
+
+  echo ""
+  quelo_disk_print_active_banner "${DISK_SELECTED_IDX}"
+  if ((DISK_SELECTED_IDX >= 0)); then
+    echo ""
+    quelo_disk_print_layout
+    printf '      %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t active_commands)" "${C_RESET}"
+  fi
+  echo ""
+
+  if ((${#DISK_DEVS[@]} > 0)); then
+    printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t select_help)" "${C_RESET}"
+    for i in "${!DISK_DEVS[@]}"; do
+      num="$(quelo_disk_disk_num "${i}")"
+      if ((i == DISK_SELECTED_IDX)); then
+        printf '  %b[%d]%b' "${C_GREEN_BOLD}" "${num}" "${C_RESET}"
+      else
+        printf '  %b%d-%b' "${C_GREEN}" "${num}" "${C_RESET}"
+      fi
+    done
+    echo ""
+    echo ""
+  fi
+
+  return 0
+}
+
+quelo_disk_confirm_yn() {
+  local prompt="$1"
+  local reply
+
+  printf '  %b%s%b' "${C_AMBER}" "${prompt}" "${C_RESET}"
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    IFS= read -r -n 1 -s reply
+  fi
+  echo ""
+  if [[ "${reply}" == [qQ] ]]; then
+    return 1
+  fi
+  if quelo_disk_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_disk_unmount_one() {
+  local target="$1" part="${2:-}" state_file base
+
+  [[ -n "${target}" ]] || return 1
+
+  if mountpoint -q "${target}" 2>/dev/null; then
+    umount "${target}" 2>/dev/null || umount -l "${target}" 2>/dev/null || true
+  fi
+
+  if [[ -n "${part}" ]] && findmnt -n "${part}" >/dev/null 2>&1; then
+    umount "${part}" 2>/dev/null || umount -l "${part}" 2>/dev/null || true
+  fi
+
+  if mountpoint -q "${target}" 2>/dev/null; then
+    echo "  $(quelo_disk_t unmount_busy)"
+    return 1
+  fi
+  if [[ -n "${part}" ]] && findmnt -n "${part}" >/dev/null 2>&1; then
+    echo "  $(quelo_disk_t unmount_busy)"
+    return 1
+  fi
+
+  for state_file in /run/quelo-doctor/automount/*; do
+    [[ -f "${state_file}" ]] || continue
+    [[ "$(<"${state_file}")" == "${target}" ]] && rm -f "${state_file}"
+  done
+
+  if [[ -n "${part}" ]]; then
+    base="${part##*/}"
+    rm -f "/run/quelo-doctor/automount/${base}" "/run/quelo-doctor/automount/${base}.hibernated-ro"
+    mkdir -p /run/quelo-doctor/automount-suppress
+    : >"/run/quelo-doctor/automount-suppress/${base}"
+  fi
+
+  rmdir "${target}" 2>/dev/null || true
+  return 0
+}
+
+quelo_disk_submenu() {
+  local dev="$1"
+  local idx="$2"
+
+  clear
+  echo "=================================="
+  printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_disk_t submenu_title)" "${C_RESET}"
+  echo "=================================="
+  echo ""
+  printf '  %b%d)%b %s\n' \
+    "${C_GREEN}" "$(quelo_disk_disk_num "${idx}")" "${C_RESET}" "${dev}"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t model)" "${C_RESET}" "$(quelo_disk_model_line "${idx}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t size)" "${C_RESET}" "${DISK_SIZES[$idx]}"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t interface)" "${C_RESET}" "$(quelo_disk_iface "${DISK_TRANS[$idx]}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t smart)" "${C_RESET}" "$(quelo_disk_smart_status "${dev}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t wear)" "${C_RESET}" "$(quelo_disk_wear "${dev}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t power_on)" "${C_RESET}" "$(quelo_disk_power_on "${dev}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t temp)" "${C_RESET}" "$(quelo_disk_temp "${dev}")"
+  printf '  %b%s:%b %s\n' \
+    "${C_AMBER}" "$(quelo_disk_t health)" "${C_RESET}" "$(quelo_disk_health "${dev}")"
+  echo ""
+  if command -v parted >/dev/null 2>&1; then
+    printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t part_table)" "${C_RESET}"
+    parted -s "${dev}" unit s print 2>/dev/null | sed 's/^/  /' || echo "  $(quelo_disk_t unknown)"
+    echo ""
+  fi
+  printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_disk_t part_lsblk)" "${C_RESET}"
+  lsblk -f "${dev}" 2>/dev/null | sed 's/^/  /' || echo "  $(quelo_disk_t unknown)"
+  echo ""
+}
+
+quelo_disk_menu() {
+  local choice choice_lc i letter idx dev pidx
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+
+  while true; do
+    quelo_disk_collect
+    quelo_disk_restore_selected
+    quelo_disk_guess_selected
+    quelo_disk_list_screen
+
+    printf '  %b%s%b' "${C_AMBER}" "$(quelo_disk_t prompt)" "${C_RESET}"
+    if ! quelo_disk_read_choice; then
+      return
+    fi
+    choice="${DISK_CHOICE}"
+    choice_lc="${choice,,}"
+
+    if [[ "${choice_lc}" == "i" ]]; then
+      if ((DISK_SELECTED_IDX < 0)); then
+        echo "  $(quelo_disk_t need_disk)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_submenu "${DISK_DEVS[$DISK_SELECTED_IDX]}" "${DISK_SELECTED_IDX}"
+      echo "  $(quelo_disk_t press_key)"
+      quelo_disk_pause
+      continue
+    fi
+
+    if [[ "${choice_lc}" == "n" ]]; then
+      if ((DISK_SELECTED_IDX < 0)); then
+        echo "  $(quelo_disk_t need_disk)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_create_partition "${DISK_SELECTED_IDX}"
+      continue
+    fi
+
+    if [[ "${choice_lc}" == "d" ]]; then
+      if ((DISK_SELECTED_IDX < 0)); then
+        echo "  $(quelo_disk_t need_disk)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_disk_ops_menu "${DISK_SELECTED_IDX}"
+      continue
+    fi
+
+    if [[ "${choice}" =~ ^[0-9]+$ ]]; then
+      if ((${#DISK_DEVS[@]} == 0)); then
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        continue
+      fi
+      if ((choice < 1 || choice > ${#DISK_DEVS[@]})); then
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_save_selected $((choice - 1))
+      continue
+    fi
+
+    if [[ "${choice_lc}" =~ ^[a-z]$ ]]; then
+      if ((DISK_SELECTED_IDX < 0)); then
+        echo "  $(quelo_disk_t need_disk)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_collect_layout "${DISK_DEVS[$DISK_SELECTED_IDX]}"
+      pidx="$(quelo_disk_find_part_by_letter "${choice_lc}")" || pidx=""
+      if [[ -z "${pidx}" ]]; then
+        echo "  $(quelo_disk_t invalid)"
+        sleep 1
+        continue
+      fi
+      quelo_disk_part_ops_menu "${pidx}"
+      continue
+    fi
+
+    if ((${#DISK_DEVS[@]} == 0)); then
+      echo "  $(quelo_disk_t invalid)"
+      sleep 1
+      continue
+    fi
+
+    echo "  $(quelo_disk_t invalid)"
+    sleep 1
+  done
+}
+
+quelo_disk_menu

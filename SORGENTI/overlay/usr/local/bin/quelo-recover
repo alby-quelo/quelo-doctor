@@ -1,0 +1,296 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-console-quiet.sh
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-fs.sh
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+DISK_DEVS=()
+DISK_SIZES=()
+DISK_MODELS=()
+DISK_VENDORS=()
+DISK_TRANS=()
+DISK_CHOICE=""
+
+quelo_recover_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_recover_t() {
+  if quelo_recover_ui_is_en; then
+    case "$1" in
+      title)          echo "DISK RECOVERY" ;;
+      no_disks)       echo "No recoverable disks found." ;;
+      select_help)    echo "Number=disk | Q=main menu" ;;
+      prompt)         echo "Choice: " ;;
+      invalid)        echo "Invalid choice." ;;
+      unknown)        echo "N/A" ;;
+      confirm)        echo "Start TestDisk on %s? It may MODIFY the partition table. [y/n]: " ;;
+      confirm_cancel) echo "Cancelled." ;;
+      no_testdisk)    echo "TestDisk is not installed." ;;
+      umount_busy)    echo "Warning: could not unmount all volumes on this disk." ;;
+      umount_ok)      echo "Volumes unmounted." ;;
+      launching)      echo "Starting TestDisk..." ;;
+      press_key)      echo "Press a key to continue..." ;;
+    esac
+  else
+    case "$1" in
+      title)          echo "RECUPERA DISCHI" ;;
+      no_disks)       echo "Nessun disco recuperabile trovato." ;;
+      select_help)    echo "Numero=disco | Q=menu principale" ;;
+      prompt)         echo "Scelta: " ;;
+      invalid)        echo "Scelta non valida." ;;
+      unknown)        echo "N/D" ;;
+      confirm)        echo "Avviare TestDisk su %s? Puo MODIFICARE la tabella partizioni. [s/n]: " ;;
+      confirm_cancel) echo "Annullato." ;;
+      no_testdisk)    echo "TestDisk non installato." ;;
+      umount_busy)    echo "Attenzione: non tutti i volumi del disco sono stati smontati." ;;
+      umount_ok)      echo "Volumi smontati." ;;
+      launching)      echo "Avvio TestDisk..." ;;
+      press_key)      echo "Premi un tasto per continuare..." ;;
+    esac
+  fi
+}
+
+quelo_recover_iface() {
+  case "${1,,}" in
+    nvme) echo "NVMe" ;;
+    sata) echo "SATA" ;;
+    usb)  echo "USB" ;;
+    ide)  echo "IDE" ;;
+    sas)  echo "SAS" ;;
+    scsi) echo "SCSI" ;;
+    ata)  echo "ATA" ;;
+    ?)    echo "$(quelo_recover_t unknown)" ;;
+    *)    echo "${1}" ;;
+  esac
+}
+
+quelo_recover_model_line() {
+  local idx="$1"
+  if [[ -n "${DISK_VENDORS[$idx]}" && "${DISK_VENDORS[$idx]}" != "${DISK_MODELS[$idx]}" ]]; then
+    echo "${DISK_VENDORS[$idx]} ${DISK_MODELS[$idx]}"
+  else
+    echo "${DISK_MODELS[$idx]}"
+  fi
+}
+
+quelo_recover_collect() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev dev dtype size model vendor tran
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* ]] && continue
+    [[ "${dev}" == /dev/sr* ]] && continue
+    [[ "${dev}" == /dev/loop* ]] && continue
+    [[ "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    DISK_MODELS+=("${model:-$(quelo_recover_t unknown)}")
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_recover_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    IFS= read -r -n 1 -s key
+  fi
+
+  if [[ "${key}" == [qQ] ]]; then
+    echo ""
+    return 1
+  fi
+
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { echo ""; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+
+  echo ""
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_recover_confirm_yn() {
+  local prompt="$1" reply
+
+  printf '  %b%s%b' "${C_AMBER}" "${prompt}" "${C_RESET}"
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    IFS= read -r -n 1 -s reply
+  fi
+  echo ""
+  if [[ "${reply}" == [qQ] ]]; then
+    return 1
+  fi
+  if quelo_recover_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_recover_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || read -r -n 1 -s _
+}
+
+quelo_recover_umount_disk() {
+  local disk="$1" part mp resolved rc=0
+
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    quelo_live_is_medium_partition "${part}" && continue
+
+    /usr/local/bin/quelo-automount remove "${part##*/}" 2>/dev/null || true
+
+    resolved="$(quelo_partition_resolve "${part}" 2>/dev/null)" || resolved="${part}"
+    mp="$(findmnt -n -o TARGET --source "${resolved}" 2>/dev/null)" || mp=""
+    [[ -z "${mp}" ]] && mp="$(findmnt -n -o TARGET "${resolved}" 2>/dev/null)" || mp=""
+    [[ -z "${mp}" ]] && continue
+
+    if ! umount "${mp}" 2>/dev/null && ! umount -l "${mp}" 2>/dev/null; then
+      rc=1
+    fi
+    mkdir -p /run/quelo-doctor/automount-suppress
+    : >"/run/quelo-doctor/automount-suppress/${part##*/}"
+  done < <(quelo_disk_enum_partitions "${disk}")
+
+  return "${rc}"
+}
+
+quelo_recover_list_screen() {
+  local i num
+
+  clear
+  echo "=================================="
+  printf '      %b%s%b\n' "${C_GREEN_BOLD}" "$(quelo_recover_t title)" "${C_RESET}"
+  echo "=================================="
+  echo ""
+
+  if ((${#DISK_DEVS[@]} == 0)); then
+    echo "  $(quelo_recover_t no_disks)"
+    echo ""
+    echo "  $(quelo_recover_t press_key)"
+    quelo_recover_pause
+    return 1
+  fi
+
+  for i in "${!DISK_DEVS[@]}"; do
+    num=$((i + 1))
+    printf '  %b%d)%b %s  %s  %s  %s\n' \
+      "${C_GREEN}" "${num}" "${C_RESET}" \
+      "${DISK_DEVS[$i]}" "${DISK_SIZES[$i]}" \
+      "$(quelo_recover_model_line "${i}")" \
+      "$(quelo_recover_iface "${DISK_TRANS[$i]}")"
+  done
+
+  echo ""
+  printf '  %b%s%b\n' "${C_AMBER}" "$(quelo_recover_t select_help)" "${C_RESET}"
+  echo ""
+  printf '  %b%s%b' "${C_AMBER}" "$(quelo_recover_t prompt)" "${C_RESET}"
+  return 0
+}
+
+quelo_recover_run_testdisk() {
+  local disk="$1" prompt
+
+  if ! command -v testdisk >/dev/null 2>&1; then
+    echo "  $(quelo_recover_t no_testdisk)"
+    return 1
+  fi
+
+  prompt="$(printf "$(quelo_recover_t confirm)" "${disk}")"
+  if ! quelo_recover_confirm_yn "${prompt}"; then
+    echo "  $(quelo_recover_t confirm_cancel)"
+    return 0
+  fi
+
+  if quelo_recover_umount_disk "${disk}"; then
+    echo "  $(quelo_recover_t umount_ok)"
+  else
+    echo "  $(quelo_recover_t umount_busy)"
+  fi
+  echo ""
+
+  echo "  $(quelo_recover_t launching)"
+  sleep 1
+
+  quelo_console_quiet_off
+  clear
+  testdisk "${disk}"
+  local rc=$?
+  quelo_console_quiet_on
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+
+  return "${rc}"
+}
+
+quelo_recover_menu() {
+  local choice idx
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+
+  while true; do
+    quelo_recover_collect
+    quelo_recover_list_screen || return 0
+
+    if ! quelo_recover_read_choice; then
+      return 0
+    fi
+    choice="${DISK_CHOICE}"
+
+    if [[ ! "${choice}" =~ ^[0-9]+$ ]]; then
+      echo "  $(quelo_recover_t invalid)"
+      sleep 1
+      continue
+    fi
+
+    idx=$((choice - 1))
+    if ((idx < 0 || idx >= ${#DISK_DEVS[@]})); then
+      echo "  $(quelo_recover_t invalid)"
+      sleep 1
+      continue
+    fi
+
+    quelo_recover_run_testdisk "${DISK_DEVS[$idx]}"
+    echo ""
+    echo "  $(quelo_recover_t press_key)"
+    quelo_recover_pause
+  done
+}
+
+quelo_recover_menu

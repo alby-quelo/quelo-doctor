@@ -1,0 +1,585 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-fs.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+DISK_DEVS=()
+DISK_SIZES=()
+DISK_MODELS=()
+DISK_VENDORS=()
+DISK_TRANS=()
+PART_DEVS=()
+PART_SIZES=()
+PART_FSTYPES=()
+PART_MOUNTED=()
+PART_MPOINTS=()
+DEST_DEVS=()
+DEST_SIZES=()
+DEST_FSTYPES=()
+DEST_MOUNTS=()
+DEST_FREE=()
+DISK_CHOICE=""
+RFILES_ENGINE_LOADED=0
+
+quelo_rfiles_tty() {
+  printf '%b' "$*" >/dev/tty 2>/dev/null || printf '%b' "$*"
+}
+
+quelo_rfiles_ttyln() {
+  quelo_rfiles_tty "$*"
+  quelo_rfiles_tty $'\n'
+}
+
+quelo_rfiles_err_pause() {
+  local msg="$1"
+  quelo_rfiles_ui_reset
+  quelo_rfiles_ttyln "  ${msg}"
+  quelo_rfiles_ttyln "  $(quelo_rfiles_t press_key)"
+  quelo_rfiles_pause
+}
+
+quelo_rfiles_load_engine() {
+  local f
+
+  ((RFILES_ENGINE_LOADED)) && return 0
+
+  for f in quelo-recover-files-whitelist.sh quelo-recover-files-engine.sh quelo-ntfs-recover.py; do
+    if [[ ! -f "${Q_BIN}/${f}" ]]; then
+      quelo_rfiles_err_pause "ERRORE: manca ${Q_BIN}/${f}"
+      return 1
+    fi
+  done
+
+  # shellcheck disable=SC1091
+  . "${Q_BIN}/quelo-recover-files-engine.sh" || {
+    quelo_rfiles_err_pause "ERRORE: modulo recupero file non caricato"
+    return 1
+  }
+  RFILES_ENGINE_LOADED=1
+  return 0
+}
+
+quelo_rfiles_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_rfiles_t() {
+  if quelo_rfiles_ui_is_en; then
+    case "$1" in
+      title)           echo "RECOVER FILES" ;;
+      step_disk)       echo "Select source disk" ;;
+      step_part)       echo "Select source partition" ;;
+      step_dest)       echo "Select destination (empty external drive)" ;;
+      no_disks)        echo "No disks found." ;;
+      no_parts)        echo "No partitions on this disk." ;;
+      no_dest)         echo "No suitable destination found." ;;
+      select_help)     echo "Number=choice | Q=back" ;;
+      prompt)          echo "Choice: " ;;
+      invalid)         echo "Invalid choice." ;;
+      unknown)         echo "N/A" ;;
+      mounted)         echo "MOUNTED" ;;
+      not_mounted)     echo "NOT MOUNTED" ;;
+      free_space)      echo "free" ;;
+      warn_storage)    echo "Use an EMPTY external drive with ENOUGH space." ;;
+      warn_long)       echo "Recovery may take HOURS. Do not power off." ;;
+      warn_source)     echo "Do not write anything to the source disk." ;;
+      warn_retry)      echo "You may retry later if the source was not modified." ;;
+      danger1)         echo "Continue? Recovery is long and needs external storage. [y/n]: " ;;
+      danger2)         echo "Are you REALLY sure? [y/n]: " ;;
+      cancel)          echo "Cancelled." ;;
+      same_disk)       echo "Destination must be on a different disk than the source." ;;
+      low_space)       echo "Warning: destination may not have enough free space." ;;
+      umount_fail)     echo "Could not unmount the source partition." ;;
+      unsupported_fs)  echo "Filesystem not supported for this recovery." ;;
+      done_title)      echo "RECOVERY COMPLETE" ;;
+      done_none)       echo "No recoverable user files found." ;;
+      done_summary)    echo "We recovered %s files in %s folders for a total of %s in %s (hours:minutes)." ;;
+      done_path)       echo "You will find them in:" ;;
+      press_key)       echo "Press a key to continue..." ;;
+      phase_running)   echo "Recovery in progress..." ;;
+    esac
+  else
+    case "$1" in
+      title)           echo "RECUPERA FILE" ;;
+      step_disk)       echo "Scegli disco sorgente" ;;
+      step_part)       echo "Scegli partizione sorgente" ;;
+      step_dest)       echo "Scegli destinazione (supporto esterno vuoto)" ;;
+      no_disks)        echo "Nessun disco trovato." ;;
+      no_parts)        echo "Nessuna partizione su questo disco." ;;
+      no_dest)         echo "Nessuna destinazione adatta trovata." ;;
+      select_help)     echo "Numero=scelta | Q=indietro" ;;
+      prompt)          echo "Scelta: " ;;
+      invalid)         echo "Scelta non valida." ;;
+      unknown)         echo "N/D" ;;
+      mounted)         echo "MONTATO" ;;
+      not_mounted)     echo "NON MONTATO" ;;
+      free_space)      echo "liberi" ;;
+      warn_storage)    echo "Usa un supporto esterno VUOTO e CAPIENTE." ;;
+      warn_long)       echo "Il recupero puo richiedere ORE. Non spegnere il PC." ;;
+      warn_source)     echo "Non scrivere nulla sul disco sorgente." ;;
+      warn_retry)      echo "Puoi ritentare se la sorgente non e stata modificata." ;;
+      danger1)         echo "Continuare? Operazione lunga, serve spazio esterno. [s/n]: " ;;
+      danger2)         echo "Sei VERAMENTE sicuro? [s/n]: " ;;
+      cancel)          echo "Annullato." ;;
+      same_disk)       echo "La destinazione deve essere su un disco diverso dalla sorgente." ;;
+      low_space)       echo "Attenzione: lo spazio libero sulla destinazione potrebbe non bastare." ;;
+      umount_fail)     echo "Impossibile smontare la partizione sorgente." ;;
+      unsupported_fs)  echo "Filesystem non supportato per questo recupero." ;;
+      done_title)      echo "RECUPERO COMPLETATO" ;;
+      done_none)       echo "Nessun file utente recuperabile trovato." ;;
+      done_summary)    echo "Abbiamo recuperato %s file in %s cartelle per un totale di %s in %s (ore:minuti)." ;;
+      done_path)       echo "Li troverai in:" ;;
+      press_key)       echo "Premi un tasto per continuare..." ;;
+      phase_running)   echo "Recupero in corso..." ;;
+    esac
+  fi
+}
+
+quelo_rfiles_iface() {
+  case "${1,,}" in
+    nvme) echo "NVMe" ;;
+    sata) echo "SATA" ;;
+    usb)  echo "USB" ;;
+    *)    echo "${1:-?}" ;;
+  esac
+}
+
+quelo_rfiles_model_line() {
+  local idx="$1"
+  if [[ -n "${DISK_VENDORS[$idx]}" && "${DISK_VENDORS[$idx]}" != "${DISK_MODELS[$idx]}" ]]; then
+    echo "${DISK_VENDORS[$idx]} ${DISK_MODELS[$idx]}"
+  else
+    echo "${DISK_MODELS[$idx]}"
+  fi
+}
+
+quelo_rfiles_collect_disks() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev dev dtype size model vendor tran
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* || "${dev}" == /dev/sr* || "${dev}" == /dev/loop* || "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    DISK_MODELS+=("${model:-$(quelo_rfiles_t unknown)}")
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_rfiles_collect_parts() {
+  local disk="$1" part size fstype mp
+
+  PART_DEVS=()
+  PART_SIZES=()
+  PART_FSTYPES=()
+  PART_MOUNTED=()
+  PART_MPOINTS=()
+
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    quelo_live_is_medium_partition "${part}" && continue
+    size="$(lsblk -no SIZE "${part}" 2>/dev/null | head -1)"
+    fstype="$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)"
+    fstype="$(quelo_fs_normalize_type "${fstype}")"
+    [[ -z "${fstype}" ]] && fstype="-"
+    mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+    PART_DEVS+=("${part}")
+    PART_SIZES+=("${size:-?}")
+    PART_FSTYPES+=("${fstype}")
+    if [[ -n "${mp}" ]]; then
+      PART_MOUNTED+=(1)
+      PART_MPOINTS+=("${mp}")
+    else
+      PART_MOUNTED+=(0)
+      PART_MPOINTS+=("")
+    fi
+  done < <(quelo_disk_enum_partitions "${disk}")
+}
+
+quelo_rfiles_collect_destinations() {
+  local skip_part="$1" live_dev disk part size fstype mp avail
+
+  DEST_DEVS=()
+  DEST_SIZES=()
+  DEST_FSTYPES=()
+  DEST_MOUNTS=()
+  DEST_FREE=()
+
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r disk; do
+    [[ -n "${disk}" ]] || continue
+    [[ "${disk}" == /dev/fd* || "${disk}" == /dev/sr* || "${disk}" == /dev/loop* ]] && continue
+    while IFS= read -r part; do
+      [[ -n "${part}" ]] || continue
+      [[ "${part}" == "${skip_part}" ]] && continue
+      quelo_live_is_medium_partition "${part}" && continue
+      [[ -n "${live_dev}" && "$(quelo_partition_disk "${part}")" == "${live_dev}" ]] && continue
+      size="$(lsblk -no SIZE "${part}" 2>/dev/null | head -1)"
+      fstype="$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)"
+      fstype="$(quelo_fs_normalize_type "${fstype}")"
+      [[ -z "${fstype}" || "${fstype}" == "swap" ]] && continue
+      mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+      if [[ -z "${mp}" ]]; then
+        mp="$(/usr/local/bin/quelo-automount mount "${part##*/}" 2>/dev/null)" || mp=""
+      fi
+      [[ -n "${mp}" && -d "${mp}" ]] || continue
+      avail="$(df -B1 --output=avail "${mp}" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+      [[ "${avail}" =~ ^[0-9]+$ ]] || avail=0
+      DEST_DEVS+=("${part}")
+      DEST_SIZES+=("${size:-?}")
+      DEST_FSTYPES+=("${fstype}")
+      DEST_MOUNTS+=("${mp}")
+      DEST_FREE+=("${avail}")
+    done < <(quelo_disk_enum_partitions "${disk}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_rfiles_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    return 1
+  fi
+
+  if [[ "${key}" == [qQ] ]]; then
+    quelo_rfiles_tty $'\n'
+    return 1
+  fi
+
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key </dev/tty 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { quelo_rfiles_tty $'\n'; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+
+  quelo_rfiles_tty $'\n'
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_rfiles_confirm_yn() {
+  local prompt="$1" reply
+
+  quelo_rfiles_tty "${C_AMBER}${prompt}${C_RESET}"
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  quelo_rfiles_tty $'\n'
+  [[ "${reply}" == [qQ] ]] && return 1
+  if quelo_rfiles_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_rfiles_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+}
+
+quelo_rfiles_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  if command -v tput >/dev/null 2>&1; then
+    tput reset >/dev/tty 2>/dev/null || true
+  fi
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_rfiles_screen_header() {
+  local subtitle="$1"
+
+  quelo_rfiles_ui_reset
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln "${C_GREEN_BOLD}      $(quelo_rfiles_t title)${C_RESET}"
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln ""
+  quelo_rfiles_ttyln "${C_AMBER}  ${subtitle}${C_RESET}"
+  quelo_rfiles_ttyln ""
+}
+
+quelo_rfiles_pick_disk() {
+  local i num choice idx
+
+  while true; do
+    quelo_rfiles_collect_disks
+    quelo_rfiles_screen_header "$(quelo_rfiles_t step_disk)"
+    if ((${#DISK_DEVS[@]} == 0)); then
+      quelo_rfiles_ttyln "  $(quelo_rfiles_t no_disks)"
+      quelo_rfiles_pause
+      return 1
+    fi
+    for i in "${!DISK_DEVS[@]}"; do
+      num=$((i + 1))
+      quelo_rfiles_ttyln "  ${C_GREEN}${num})${C_RESET} ${DISK_DEVS[$i]}  ${DISK_SIZES[$i]}  $(quelo_rfiles_model_line "${i}")"
+    done
+    quelo_rfiles_ttyln ""
+    quelo_rfiles_ttyln "${C_AMBER}  $(quelo_rfiles_t select_help)${C_RESET}"
+    quelo_rfiles_tty "${C_AMBER}  $(quelo_rfiles_t prompt)${C_RESET}"
+    quelo_rfiles_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#DISK_DEVS[@]})) || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    printf '%s\n' "${DISK_DEVS[$idx]}"
+    return 0
+  done
+}
+
+quelo_rfiles_pick_partition() {
+  local disk="$1" i num choice idx part
+
+  while true; do
+    quelo_rfiles_collect_parts "${disk}"
+    quelo_rfiles_screen_header "$(quelo_rfiles_t step_part)"
+    quelo_rfiles_ttyln "  ${disk}"
+    quelo_rfiles_ttyln ""
+    if ((${#PART_DEVS[@]} == 0)); then
+      quelo_rfiles_ttyln "  $(quelo_rfiles_t no_parts)"
+      quelo_rfiles_pause
+      return 1
+    fi
+    for i in "${!PART_DEVS[@]}"; do
+      num=$((i + 1))
+      if [[ "${PART_MOUNTED[$i]}" == 1 ]]; then
+        quelo_rfiles_ttyln "  ${C_GREEN}${num})${C_RESET} ${PART_DEVS[$i]}  ${PART_SIZES[$i]}  ${PART_FSTYPES[$i]}  [$(quelo_rfiles_t mounted): ${PART_MPOINTS[$i]}]"
+      else
+        quelo_rfiles_ttyln "  ${C_GREEN}${num})${C_RESET} ${PART_DEVS[$i]}  ${PART_SIZES[$i]}  ${PART_FSTYPES[$i]}  [$(quelo_rfiles_t not_mounted)]"
+      fi
+    done
+    quelo_rfiles_ttyln ""
+    quelo_rfiles_ttyln "${C_AMBER}  $(quelo_rfiles_t select_help)${C_RESET}"
+    quelo_rfiles_tty "${C_AMBER}  $(quelo_rfiles_t prompt)${C_RESET}"
+    quelo_rfiles_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#PART_DEVS[@]})) || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    printf '%s\n' "${PART_DEVS[$idx]}"
+    return 0
+  done
+}
+
+quelo_rfiles_pick_destination() {
+  local skip_part="$1" i num choice idx mp
+
+  while true; do
+    quelo_rfiles_collect_destinations "${skip_part}"
+    quelo_rfiles_screen_header "$(quelo_rfiles_t step_dest)"
+    if ((${#DEST_DEVS[@]} == 0)); then
+      quelo_rfiles_ttyln "  $(quelo_rfiles_t no_dest)"
+      quelo_rfiles_pause
+      return 1
+    fi
+    for i in "${!DEST_DEVS[@]}"; do
+      num=$((i + 1))
+      quelo_rfiles_ttyln "  ${C_GREEN}${num})${C_RESET} ${DEST_DEVS[$i]}  ${DEST_SIZES[$i]}  ${DEST_FSTYPES[$i]}  ${DEST_MOUNTS[$i]}  ($(quelo_rfiles_human_bytes "${DEST_FREE[$i]}") $(quelo_rfiles_t free_space))"
+    done
+    quelo_rfiles_ttyln ""
+    quelo_rfiles_ttyln "${C_AMBER}  $(quelo_rfiles_t select_help)${C_RESET}"
+    quelo_rfiles_tty "${C_AMBER}  $(quelo_rfiles_t prompt)${C_RESET}"
+    quelo_rfiles_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#DEST_DEVS[@]})) || { quelo_rfiles_ttyln "  $(quelo_rfiles_t invalid)"; sleep 1; continue; }
+    mp="${DEST_MOUNTS[$idx]}"
+    printf '%s\n%s\n' "${DEST_DEVS[$idx]}" "${mp}"
+    return 0
+  done
+}
+
+quelo_rfiles_umount_part() {
+  local part="$1" mp resolved
+
+  /usr/local/bin/quelo-automount remove "${part##*/}" 2>/dev/null || true
+  resolved="$(quelo_partition_resolve "${part}" 2>/dev/null)" || resolved="${part}"
+  mp="$(findmnt -n -o TARGET --source "${resolved}" 2>/dev/null)" || mp=""
+  [[ -z "${mp}" ]] && return 0
+  umount "${mp}" 2>/dev/null || umount -l "${mp}" 2>/dev/null || return 1
+  mkdir -p /run/quelo-doctor/automount-suppress
+  : >"/run/quelo-doctor/automount-suppress/${part##*/}"
+  return 0
+}
+
+quelo_rfiles_confirm_start() {
+  local src="$1" dest_mp="$2" part_size avail
+
+  quelo_rfiles_ui_reset
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln "${C_GREEN_BOLD}      $(quelo_rfiles_t title)${C_RESET}"
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln ""
+  quelo_rfiles_ttyln "${C_RED}  $(quelo_rfiles_t warn_storage)${C_RESET}"
+  quelo_rfiles_ttyln "${C_RED}  $(quelo_rfiles_t warn_long)${C_RESET}"
+  quelo_rfiles_ttyln "${C_AMBER}  $(quelo_rfiles_t warn_source)${C_RESET}"
+  quelo_rfiles_ttyln "${C_AMBER}  $(quelo_rfiles_t warn_retry)${C_RESET}"
+  quelo_rfiles_ttyln ""
+  quelo_rfiles_ttyln "  ${src} -> ${dest_mp}"
+  quelo_rfiles_ttyln ""
+  avail="$(df -B1 --output=avail "${dest_mp}" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+  part_size="$(lsblk -b -no SIZE "${src}" 2>/dev/null | head -1 | tr -d '[:space:]')"
+  if [[ "${avail}" =~ ^[0-9]+$ && "${part_size}" =~ ^[0-9]+$ ]]; then
+    if ((avail < part_size)); then
+      quelo_rfiles_ttyln "${C_RED}  $(quelo_rfiles_t low_space)${C_RESET}"
+      quelo_rfiles_ttyln ""
+    fi
+  fi
+  quelo_rfiles_confirm_yn "$(quelo_rfiles_t danger1)" || return 1
+  quelo_rfiles_confirm_yn "$(quelo_rfiles_t danger2)" || return 1
+  return 0
+}
+
+quelo_rfiles_show_summary() {
+  local out_dir="$1" elapsed="$2" files folders bytes hbytes dur
+
+  files="${RFILES_STAT_FILES}"
+  folders="${RFILES_STAT_FOLDERS}"
+  bytes="${RFILES_STAT_BYTES}"
+  hbytes="$(quelo_rfiles_human_bytes "${bytes}")"
+  dur="$(quelo_rfiles_format_duration "${elapsed}")"
+
+  quelo_rfiles_ui_reset
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln "${C_GREEN_BOLD}      $(quelo_rfiles_t done_title)${C_RESET}"
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln ""
+  if ((files == 0)); then
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t done_none)"
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t warn_retry)"
+  else
+    quelo_rfiles_ttyln "  $(printf "$(quelo_rfiles_t done_summary)" "${files}" "${folders}" "${hbytes}" "${dur}")"
+    quelo_rfiles_ttyln ""
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t done_path)"
+    quelo_rfiles_ttyln "  ${C_GREEN}${out_dir}${C_RESET}"
+  fi
+  quelo_rfiles_ttyln ""
+  quelo_rfiles_ttyln "  $(quelo_rfiles_t press_key)"
+  quelo_rfiles_pause
+}
+
+quelo_rfiles_run_job() {
+  local src="$1" dest_part="$2" dest_mp="$3" fstype out_dir t0 elapsed rc=0
+
+  fstype="$(quelo_fs_normalize_type "$(lsblk -no FSTYPE "${src}" 2>/dev/null | head -1)")"
+  [[ -z "${fstype}" ]] && fstype="$(quelo_fs_detect "${src}" 2>/dev/null)" || true
+  fstype="$(quelo_fs_normalize_type "${fstype}")"
+
+  out_dir="${dest_mp}/recuperati_$(date +%Y-%m-%d_%H%M%S)"
+  mkdir -p "${out_dir}" || return 1
+
+  if ! quelo_rfiles_confirm_start "${src}" "${dest_mp}"; then
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  if [[ "$(quelo_partition_disk "${src}")" == "$(quelo_partition_disk "${dest_part}")" ]]; then
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t same_disk)"
+    sleep 2
+    return 1
+  fi
+
+  if ! quelo_rfiles_umount_part "${src}"; then
+    quelo_rfiles_ttyln "  $(quelo_rfiles_t umount_fail)"
+    sleep 2
+    return 1
+  fi
+
+  quelo_rfiles_ui_reset
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln "${C_GREEN_BOLD}      $(quelo_rfiles_t title)${C_RESET}"
+  quelo_rfiles_ttyln "=================================="
+  quelo_rfiles_ttyln ""
+  quelo_rfiles_ttyln "  $(quelo_rfiles_t phase_running)"
+  quelo_rfiles_ttyln ""
+
+  t0=$(date +%s)
+  case "${fstype}" in
+    ext2|ext3|ext4)
+      if ! command -v extundelete >/dev/null 2>&1 && ! command -v ext4magic >/dev/null 2>&1; then
+        quelo_rfiles_ttyln "  extundelete/ext4magic missing"
+        return 1
+      fi
+      quelo_rfiles_recover_ext "${src}" "${out_dir}" || rc=1
+      ;;
+    ntfs)
+      if ! command -v ntfsundelete >/dev/null 2>&1; then
+        quelo_rfiles_ttyln "  ntfsundelete missing"
+        return 1
+      fi
+      quelo_rfiles_recover_ntfs "${src}" "${out_dir}" || rc=1
+      ;;
+    *)
+      quelo_rfiles_ttyln "  $(quelo_rfiles_t unsupported_fs) (${fstype})"
+      sleep 2
+      return 1
+      ;;
+  esac
+  elapsed=$(( $(date +%s) - t0 ))
+
+  quelo_rfiles_show_summary "${out_dir}" "${elapsed}"
+  return "${rc}"
+}
+
+quelo_rfiles_menu() {
+  local disk src dest_line dest_part dest_mp
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+  quelo_rfiles_ui_reset
+
+  if ! quelo_rfiles_load_engine; then
+    return 1
+  fi
+
+  while true; do
+    disk="$(quelo_rfiles_pick_disk)" || return 0
+    src="$(quelo_rfiles_pick_partition "${disk}")" || continue
+    dest_line="$(quelo_rfiles_pick_destination "${src}")" || continue
+    dest_part="${dest_line%%$'\n'*}"
+    dest_mp="${dest_line#*$'\n'}"
+
+    if [[ "$(quelo_partition_disk "${src}")" == "$(quelo_partition_disk "${dest_part}")" ]]; then
+      quelo_rfiles_ttyln "  $(quelo_rfiles_t same_disk)"
+      sleep 2
+      continue
+    fi
+
+    quelo_rfiles_run_job "${src}" "${dest_part}" "${dest_mp}"
+  done
+}
+
+quelo_rfiles_menu

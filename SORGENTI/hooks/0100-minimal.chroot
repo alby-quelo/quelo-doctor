@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+chmod 0755 /usr/local/bin/live-menu /usr/local/bin/quelo-disks /usr/local/bin/quelo-recover /usr/local/bin/quelo-recover-files /usr/local/bin/quelo-boot-repair /usr/local/bin/quelo-scan /usr/local/bin/quelo-unlock /usr/local/bin/quelo-unlock-windows.sh /usr/local/bin/quelo-unlock-linux.sh /usr/local/bin/quelo-unlock-luks.sh /usr/local/bin/quelo-unlock-bitlocker.sh /usr/local/bin/quelo-scan-engine.sh /usr/local/bin/quelo-scan-defs.sh /usr/local/bin/quelo-scan-persist.sh /usr/local/bin/quelo-recover-files-engine.sh /usr/local/bin/quelo-recover-files-whitelist.sh /usr/local/bin/quelo-ntfs-recover.py /usr/local/bin/quelo-setup-display /usr/local/bin/quelo-show-logo /usr/local/bin/quelo-clear-fb /usr/local/bin/quelo-network /usr/local/bin/quelo-automount /usr/local/bin/quelo-mc /usr/local/bin/quelo-mc-functions.sh /usr/local/bin/quelo-console-quiet.sh /usr/local/bin/quelo-fs.sh /usr/local/bin/quelo-fs-repair.sh /usr/local/bin/quelo-disk-parted.sh /usr/local/bin/quelo-credits /usr/local/bin/quelo-manual /usr/local/bin/quelo-save-report /usr/local/bin/quelo-pager.sh
+chsh -s /bin/bash root || true
+
+mkdir -p /etc/systemd/system/sysinit.target.wants
+ln -sf ../quelo-setup-display.service /etc/systemd/system/sysinit.target.wants/quelo-setup-display.service
+
+if id user >/dev/null 2>&1; then
+  userdel -r user || true
+fi
+
+apt-get purge -y live-tools 2>/dev/null || true
+apt-get autoremove -y --purge
+
+find /usr/share/doc -mindepth 1 -delete 2>/dev/null || true
+find /usr/share/man -mindepth 1 -delete 2>/dev/null || true

@@ -1,0 +1,2 @@
+4 — DISK RECOVERY (TestDisk)
+For corrupt/lost partition tables. Pick disk → TestDisk UI.

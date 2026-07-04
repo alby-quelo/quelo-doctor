@@ -1,0 +1,2 @@
+L — LOCALE / N — NETWORK
+L: screen language and keyboard. N: network setup (DHCP/manual).

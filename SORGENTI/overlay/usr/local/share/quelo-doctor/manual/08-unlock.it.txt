@@ -1,0 +1,21 @@
+8 — SBLOCCA PASSWORD E CRYPTAZIONI (experimental)
+══════════════════════════════════════════════════════════════
+Disclaimer obbligatorio (una volta per sessione).
+
+1 Password Windows (chntpw)
+  - Nuova password / rimuovi / sblocca account / promuovi admin
+  - Non recupera password esistenti
+  - Non funziona con account Microsoft/dominio
+
+2 Password Linux
+  - chroot + nuova password utente o root
+
+3 Sblocca LUKS
+  - Richiede LA TUA passphrase
+  - Monta volume in /mnt/quelo-luks-open/
+
+4 Sblocca BitLocker
+  - Password o chiave recupero 48 cifre
+  - Monta in /mnt/quelo-bitlocker-clear/
+
+Nessun brute-force. Senza chiavi corrette lo sblocco non è possibile.

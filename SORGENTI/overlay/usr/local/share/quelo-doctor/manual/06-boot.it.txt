@@ -1,0 +1,19 @@
+6 — RIPARA AVVIO SISTEMA OPERATIVO
+══════════════════════════════════════════════════════════════
+Flusso: disco → rilevamento partizioni → operazioni.
+
+1 Ripristina GRUB (completo)
+  chroot, grub-install, update-grub, os-prober
+
+2 Ripristina MBR (BIOS)
+  2a GRUB (grub-install i386-pc)
+  2b MBR stile Windows (ms-sys)
+
+3 Ripristino avvio Windows
+  efibootmgr, ntfsfix; se impossibile → istruzioni recovery
+
+4 Aggiorna solo menu GRUB
+  update-grub senza reinstallazione
+
+Tabella partizioni corrotta: usare menu 4 (TestDisk) o 2 tasto D.
+Doppia conferma su scritture.

@@ -1,0 +1,6 @@
+1 — ENTRA NELLA SHELL (root)
+══════════════════════════════════════════════════════════════
+Apre una shell Bash interattiva come root.
+Per uscire: exit o Ctrl+D → torna al menu.
+
+Utile per comandi manuali non coperti dal menu.

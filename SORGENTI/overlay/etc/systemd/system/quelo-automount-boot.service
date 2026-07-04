@@ -1,0 +1,15 @@
+[Unit]
+Description=Quelo Doctor automount partizioni al boot
+DefaultDependencies=no
+After=systemd-udevd.service blk-availability.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/sbin/modprobe ntfs3
+ExecStartPre=/sbin/modprobe fuse
+ExecStart=/usr/local/bin/quelo-automount boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

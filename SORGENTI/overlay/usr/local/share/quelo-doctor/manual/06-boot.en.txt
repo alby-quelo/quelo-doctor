@@ -1,0 +1,3 @@
+6 — REPAIR OS BOOT
+GRUB full reinstall, MBR, Windows boot, update-grub only.
+Corrupt partition table → menu 4 or disk check key D.

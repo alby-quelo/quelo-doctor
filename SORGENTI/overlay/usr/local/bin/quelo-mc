@@ -1,0 +1,42 @@
+#!/bin/bash
+# Midnight Commander con skin Queelo Doctor e vim come editor.
+
+export TERM="${TERM:-linux}"
+export EDITOR=vim
+export VISUAL=vim
+export MC_SKIN=quelo-doctor
+
+if [[ -f /etc/default/locale ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/default/locale
+  set +a
+fi
+export LANG="${LANG:-it_IT.UTF-8}"
+export LC_ALL="${LC_ALL:-${LANG}}"
+export LC_MESSAGES="${LC_MESSAGES:-${LANG}}"
+
+# shellcheck disable=SC1091
+. /usr/local/bin/quelo-mc-functions.sh
+
+quelo_mc_prepare
+
+/usr/local/bin/quelo-setup-display 2>/dev/null || true
+/usr/local/bin/quelo-clear-fb 2>/dev/null || true
+clear
+
+quelo_mc_show_help
+clear
+
+if command -v mc >/dev/null 2>&1; then
+  # -c forza i colori su console/QEMU quando il rilevamento automatico fallisce
+  mc -c --skin=quelo-doctor /media /root
+else
+  if quelo_mc_is_en; then
+    echo "mc is not installed."
+  else
+    echo "mc non installato."
+  fi
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+  exit 1
+fi

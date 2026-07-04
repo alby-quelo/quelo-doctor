@@ -1,0 +1,27 @@
+#!/bin/bash
+# Database ClamAV preinstallato nell'ISO (richiede rete in fase di build).
+set -e
+
+export DEBIAN_FRONTEND=noninteractive
+
+mkdir -p /var/lib/clamav /var/log/clamav /run/clamav
+chown -R clamav:clamav /var/lib/clamav /var/log/clamav /run/clamav 2>/dev/null || true
+
+# freshclam prova a notificare clamd dopo il download; in build non c'e clamd.
+if [[ -f /etc/clamav/freshclam.conf ]]; then
+  if grep -q '^NotifyClamd' /etc/clamav/freshclam.conf 2>/dev/null; then
+    sed -i 's/^NotifyClamd.*/NotifyClamd no/' /etc/clamav/freshclam.conf
+  else
+    printf '\nNotifyClamd no\n' >>/etc/clamav/freshclam.conf
+  fi
+fi
+
+if command -v freshclam >/dev/null 2>&1; then
+  freshclam --stdout 2>/dev/null || freshclam 2>/dev/null || true
+fi
+
+if [[ -f /var/lib/clamav/main.cvd || -f /var/lib/clamav/main.cld ]]; then
+  echo "ClamAV database OK in ISO ($(ls -1 /var/lib/clamav/*.cvd 2>/dev/null | wc -l) file .cvd)"
+else
+  echo "ATTENZIONE: database ClamAV non scaricato in build" >&2
+fi

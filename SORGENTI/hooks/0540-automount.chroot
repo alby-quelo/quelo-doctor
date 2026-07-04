@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+chmod 0755 /usr/local/bin/quelo-automount
+mkdir -p /media
+
+udevadm control --reload-rules 2>/dev/null || true
+
+mkdir -p /etc/systemd/system/sysinit.target.wants
+ln -sf ../quelo-automount-boot.service \
+  /etc/systemd/system/sysinit.target.wants/quelo-automount-boot.service

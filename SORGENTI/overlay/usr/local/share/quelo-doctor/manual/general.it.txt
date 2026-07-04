@@ -1,0 +1,46 @@
+MANUALE GENERALE — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+Cos'è Quelo Doctor
+  ISO live di soccorso per PC. Avvio da USB/DVD, menu testuale,
+  nessun desktop. Per diagnosi dischi, recupero dati, antivirus
+  offline, ripristino avvio e password.
+
+Avvio
+  1. Boot da USB (UEFI o Legacy BIOS)
+  2. Attendere il menu principale verde/ambra
+  3. Numero o lettera + Invio implicito (un tasto)
+
+Navigazione comune
+  - Numero = scegli voce menu
+  - Q = indietro / annulla nei sottomenu e nei testi (C/M)
+  - s/n o y/n = conferme (italiano/inglese da menu L)
+  - Alt+Z = spegni   Alt+R = riavvia
+
+Sezione PRINCIPALE (1-8)
+  1 Shell root — linea di comando avanzata
+  2 Controllo dischi — SMART, partizioni, operazioni disco
+  3 Gestione file — Midnight Commander
+  4 Recupera dischi — TestDisk (tabella partizioni)
+  5 Recupera file — wizard file da dischi ext/NTFS
+  6 Ripara avvio S.O. — GRUB, MBR, Windows boot
+  7 Controlla infezioni — ClamAV, YARA, persistenza
+  8 Sblocca password (experimental) — Windows/Linux/LUKS/BitLocker
+
+Sezione AMBIENTE
+  L = lingua e tastiera
+  N = rete (DHCP / configurazione)
+
+Sezione INFO
+  C = crediti e licenze
+  M = questo manuale
+  S = salva rapporto/log su chiavetta
+
+Consigli
+  - Collegare rete (N) prima di aggiornare definizioni antivirus
+  - Non usare il disco live come destinazione operazioni
+  - Doppia conferma sulle operazioni distruttive
+  - Dopo riparazione avvio: riavviare e testare
+
+Versione
+  Leggere in alto nel menu: QUELO DOCTOR x.xx alpha

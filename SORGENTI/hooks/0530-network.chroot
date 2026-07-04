@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+systemctl enable NetworkManager.service
+systemctl enable ModemManager.service
+
+if systemctl is-enabled systemd-networkd.service >/dev/null 2>&1; then
+  systemctl disable systemd-networkd.service 2>/dev/null || true
+  systemctl mask systemd-networkd.service 2>/dev/null || true
+fi

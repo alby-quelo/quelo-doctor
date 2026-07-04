@@ -1,0 +1,7 @@
+# ISO: distribuita via GitHub Releases, non nel tree git
+ISO/*.iso
+ISO/*.ISO
+
+# Build locale
+.build/
+*.log

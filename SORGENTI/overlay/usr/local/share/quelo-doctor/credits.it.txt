@@ -1,0 +1,66 @@
+CREDITI — QUELO DOCTOR
+══════════════════════════════════════════════════════════════
+
+CORRADO GUZZANTI
+  Creatore del personaggio QUELO che ha ispirato questa distribuzione
+  rescue. Grazie per l'idea e il personaggio che dà nome al progetto.
+
+──────────────────────────────────────────────────────────────
+SOFTWARE DI TERZE PARTI (oltre al nucleo Debian)
+  Formato: NOME → uso in Quelo Doctor
+
+TestDisk / PhotoRec → Menu 4 RECUPERA DISCHI
+  https://www.cgsecurity.org/
+
+Midnight Commander (mc) → Menu 3 GESTIONE FILE
+  https://midnight-commander.org/
+
+ClamAV / freshclam → Menu 7 antivirus
+  https://www.clamav.net/
+
+YARA + regole community (Yara-Rules) → Menu 7 scansione
+  https://virustotal.github.io/yara/
+
+chkrootkit → Menu 7 rootkit Linux
+  http://www.chkrootkit.org/
+
+extundelete / ext4magic → Menu 5 recupero file (ext)
+  Progetti open source per filesystem ext
+
+ntfs-3g / ntfsundelete → Menu 5 recupero NTFS
+  https://www.tuxera.com/community/open-source-ntfs-3g/
+
+GRUB / os-prober / efibootmgr → Menu 6 ripristino avvio
+  GNU GRUB, utilità boot EFI/BIOS
+
+ms-sys → Menu 6 MBR Windows (compilato da sorgente SourceForge)
+  https://ms-sys.sourceforge.net/
+
+chntpw → Menu 8 password Windows
+  https://pogostick.net/~pnh/ntpasswd/
+
+cryptsetup → Menu 8 sblocco LUKS
+  https://gitlab.com/cryptsetup/cryptsetup
+
+dislocker → Menu 8 sblocco BitLocker
+  https://github.com/Aorimn/dislocker
+
+smartmontools / nvme-cli → Menu 2 SMART dischi
+NetworkManager / wpasupplicant → Menu N rete
+
+Firmware WiFi/Ethernet (pacchetti firmware-* Debian non-free-firmware)
+  Produttori hardware rispettivi (Intel, Realtek, Broadcom, ecc.)
+
+Python 3 / PIL → logo e interfaccia framebuffer
+  https://www.python.org/  https://python-pillow.org/
+
+Debian Live / live-build → struttura ISO live
+  https://www.debian.org/  https://live-team.debian.net/
+
+man-db / groff-base / less → Menu C e M (viewer documenti stile man)
+  https://www.gnu.org/software/groff/
+
+──────────────────────────────────────────────────────────────
+QUELO DOCTOR (menu, script, overlay)
+  Progetto autoprodotto — vedi anche Licenze.
+  Viewer testi C/M: quelo-pager.sh (txt → troff → man -l → less).

@@ -1,0 +1,878 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+REPAIR_MP="/mnt/quelo-repair"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-fs.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER_BOLD=$'\033[1;33m'
+C_AMBER=$'\033[33m'
+C_RED=$'\033[1;31m'
+C_RESET=$'\033[0m'
+
+DISK_DEVS=()
+DISK_SIZES=()
+DISK_MODELS=()
+DISK_VENDORS=()
+DISK_TRANS=()
+DISK_CHOICE=""
+DISK_SCHEME=""
+DISK_HAS_EFI=0
+DISK_BIOS_MODE=0
+DISK_TABLE_BAD=0
+PART_DEVS=()
+PART_SIZES=()
+PART_FSTYPES=()
+PART_ROLES=()
+
+quelo_brepair_tty() {
+  printf '%b' "$*" >/dev/tty 2>/dev/null || printf '%b' "$*"
+}
+
+quelo_brepair_ttyln() {
+  quelo_brepair_tty "$*"
+  quelo_brepair_tty $'\n'
+}
+
+quelo_brepair_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_brepair_t() {
+  if quelo_brepair_ui_is_en; then
+    case "$1" in
+      title)            echo "REPAIR OS BOOT" ;;
+      step_disk)        echo "Select disk to repair" ;;
+      step_ops)         echo "Boot repair operations" ;;
+      step_linux_root)  echo "Select Linux root partition" ;;
+      step_efi)         echo "Select EFI System Partition" ;;
+      step_mbr)         echo "Restore boot sector (BIOS / MBR)" ;;
+      no_disks)         echo "No disks found." ;;
+      select_help)      echo "Number=choice | Q=back" ;;
+      prompt)           echo "Choice: " ;;
+      invalid)          echo "Invalid choice." ;;
+      unknown)          echo "N/A" ;;
+      scheme_gpt)       echo "GPT" ;;
+      scheme_mbr)       echo "MBR (msdos)" ;;
+      boot_uefi)        echo "UEFI (EFI partition found)" ;;
+      boot_bios)        echo "BIOS/Legacy" ;;
+      role_efi)         echo "EFI" ;;
+      role_linux)       echo "Linux root" ;;
+      role_windows)     echo "Windows" ;;
+      role_boot)        echo "/boot" ;;
+      role_swap)        echo "swap" ;;
+      role_other)       echo "data" ;;
+      op_grub)          echo "Reinstall GRUB (full)" ;;
+      op_mbr)           echo "Restore MBR / boot sector (BIOS)" ;;
+      op_windows)       echo "Repair Windows boot" ;;
+      op_update_grub)   echo "Update GRUB menu only (update-grub)" ;;
+      mbr_grub)         echo "MBR with GRUB (grub-install)" ;;
+      mbr_win)          echo "MBR Windows style (ms-sys)" ;;
+      hint_grub)        echo "Suggested: 1 or 4 if Linux is installed" ;;
+      hint_windows)     echo "Suggested: 3 if Windows only" ;;
+      table_bad)        echo "WARNING: partition table unreadable or corrupt on this disk." ;;
+      table_bad_help)   echo "To repair the PARTITION TABLE, press Q and in the MAIN MENU open:" ;;
+      table_bad_hdr)    echo "  >>> WHERE TO GO <<<" ;;
+      table_bad_4)      echo "  [4] DISK RECOVERY (TestDisk) — scan and rebuild partition table" ;;
+      table_bad_2)      echo "  [2] DISK CHECK → then key [D] — disk table operations" ;;
+      table_bad_q)      echo "Press Q repeatedly to return to the main menu." ;;
+      table_bad_note)   echo "This menu [6] repairs BOOT only, not the partition table." ;;
+      not_bios)         echo "Not applicable: disk uses UEFI/GPT without legacy MBR boot." ;;
+      no_linux)         echo "No Linux root partition found on this disk." ;;
+      no_efi)           echo "No EFI System Partition found." ;;
+      no_windows)       echo "No Windows (NTFS) partition found." ;;
+      danger_warn)      echo "WARNING: writes boot data on %s" ;;
+      danger_confirm1)  echo "Continue? Boot sectors will be modified. [y/n]: " ;;
+      danger_confirm2)  echo "Are you REALLY sure? [y/n]: " ;;
+      cancel)           echo "Cancelled." ;;
+      press_key)        echo "Press a key to continue..." ;;
+      ok)               echo "Operation completed." ;;
+      fail)             echo "Operation failed (code %s)." ;;
+      win_recovery_title) echo "WINDOWS RECOVERY MEDIA NEEDED" ;;
+      win_recovery_intro) echo "Boot repair cannot be completed from Quelo Doctor." ;;
+      win_recovery_use) echo "Use Windows recovery media (USB/DVD):" ;;
+      win_recovery_path) echo "Troubleshoot -> Advanced options -> Command Prompt" ;;
+      win_recovery_cmds) echo "Typical commands on the PC to repair:" ;;
+      win_recovery_cmd1) echo "  bootrec /fixmbr" ;;
+      win_recovery_cmd2) echo "  bootrec /fixboot" ;;
+      win_recovery_cmd3) echo "  bootrec /scanos" ;;
+      win_recovery_cmd4) echo "  bootrec /rebuildbcd" ;;
+      win_recovery_alt) echo "Or: Settings -> System -> Recovery -> Advanced startup" ;;
+      running)          echo "Running..." ;;
+      grub_done)        echo "GRUB reinstalled. Reboot and test." ;;
+      menu_done)        echo "GRUB menu regenerated." ;;
+      win_partial)      echo "Windows boot repair attempted from Linux." ;;
+      win_try_recovery) echo "If the PC still does not boot, use Windows recovery media (see instructions)." ;;
+    esac
+  else
+    case "$1" in
+      title)            echo "RIPARA AVVIO SISTEMA OPERATIVO" ;;
+      step_disk)        echo "Scegli disco da riparare" ;;
+      step_ops)         echo "Operazioni ripristino avvio" ;;
+      step_linux_root)  echo "Scegli partizione root Linux" ;;
+      step_efi)         echo "Scegli partizione EFI System" ;;
+      step_mbr)         echo "Ripristina settore di avvio (BIOS / MBR)" ;;
+      no_disks)         echo "Nessun disco trovato." ;;
+      select_help)      echo "Numero=scelta | Q=indietro" ;;
+      prompt)           echo "Scelta: " ;;
+      invalid)          echo "Scelta non valida." ;;
+      unknown)          echo "N/D" ;;
+      scheme_gpt)       echo "GPT" ;;
+      scheme_mbr)       echo "MBR (msdos)" ;;
+      boot_uefi)        echo "UEFI (partizione EFI trovata)" ;;
+      boot_bios)        echo "BIOS/Legacy" ;;
+      role_efi)         echo "EFI" ;;
+      role_linux)       echo "root Linux" ;;
+      role_windows)     echo "Windows" ;;
+      role_boot)        echo "/boot" ;;
+      role_swap)        echo "swap" ;;
+      role_other)       echo "dati" ;;
+      op_grub)          echo "Ripristina GRUB (installazione completa)" ;;
+      op_mbr)           echo "Ripristina MBR / settore avvio (BIOS)" ;;
+      op_windows)       echo "Ripristino avvio Windows" ;;
+      op_update_grub)   echo "Aggiorna solo menu GRUB (update-grub)" ;;
+      mbr_grub)         echo "MBR con GRUB (grub-install)" ;;
+      mbr_win)          echo "MBR stile Windows (ms-sys)" ;;
+      hint_grub)        echo "Suggerito: 1 o 4 se e installato Linux" ;;
+      hint_windows)     echo "Suggerito: 3 se solo Windows" ;;
+      table_bad)        echo "ATTENZIONE: tabella partizioni illeggibile o corrotta su questo disco." ;;
+      table_bad_help)   echo "Per riparare la TABELLA partizioni premi Q e nel MENU PRINCIPALE apri:" ;;
+      table_bad_hdr)    echo "  >>> DOVE ANDARE <<<" ;;
+      table_bad_4)      echo "  [4] RECUPERA DISCHI (TestDisk) — scansione e ripristino tabella" ;;
+      table_bad_2)      echo "  [2] CONTROLLO DISCHI → poi tasto [D] — operazioni tabella disco" ;;
+      table_bad_q)      echo "Premi Q più volte per tornare al menu principale." ;;
+      table_bad_note)   echo "Questo menu [6] ripara solo l'AVVIO, non la tabella partizioni." ;;
+      not_bios)         echo "Non applicabile: disco UEFI/GPT senza avvio MBR classico." ;;
+      no_linux)         echo "Nessuna partizione root Linux trovata su questo disco." ;;
+      no_efi)           echo "Nessuna partizione EFI System trovata." ;;
+      no_windows)       echo "Nessuna partizione Windows (NTFS) trovata." ;;
+      danger_warn)      echo "ATTENZIONE: scrittura dati di avvio su %s" ;;
+      danger_confirm1)  echo "Continuare? I settori di avvio saranno modificati. [s/n]: " ;;
+      danger_confirm2)  echo "Sei VERAMENTE sicuro? [s/n]: " ;;
+      cancel)           echo "Annullato." ;;
+      press_key)        echo "Premi un tasto per continuare..." ;;
+      ok)               echo "Operazione completata." ;;
+      fail)             echo "Operazione non riuscita (codice %s)." ;;
+      win_recovery_title) echo "SERVE DISCO DI SOCCORSO WINDOWS" ;;
+      win_recovery_intro) echo "Il ripristino avvio non puo essere completato da Quelo Doctor." ;;
+      win_recovery_use) echo "Usa un supporto di ripristino Windows (USB/DVD):" ;;
+      win_recovery_path) echo "Risoluzione problemi -> Opzioni avanzate -> Prompt dei comandi" ;;
+      win_recovery_cmds) echo "Comandi tipici sul PC da riparare:" ;;
+      win_recovery_cmd1) echo "  bootrec /fixmbr" ;;
+      win_recovery_cmd2) echo "  bootrec /fixboot" ;;
+      win_recovery_cmd3) echo "  bootrec /scanos" ;;
+      win_recovery_cmd4) echo "  bootrec /rebuildbcd" ;;
+      win_recovery_alt) echo "Oppure: Impostazioni -> Sistema -> Ripristino -> Riavvio ora (avvio avanzato)" ;;
+      running)          echo "Esecuzione in corso..." ;;
+      grub_done)        echo "GRUB reinstallato. Riavvia e prova." ;;
+      menu_done)        echo "Menu GRUB rigenerato." ;;
+      win_partial)      echo "Ripristino avvio Windows tentato da Linux." ;;
+      win_try_recovery) echo "Se il PC non si avvia ancora, usa il disco di ripristino Windows (vedi istruzioni)." ;;
+    esac
+  fi
+}
+
+quelo_brepair_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  if command -v tput >/dev/null 2>&1; then
+    tput reset >/dev/tty 2>/dev/null || true
+  fi
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_brepair_pause() {
+  read -r -n 1 -s _ </dev/tty 2>/dev/null || true
+}
+
+quelo_brepair_read_choice() {
+  local key buf
+
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  if [[ "${key}" == [qQ] ]]; then
+    quelo_brepair_tty $'\n'
+    return 1
+  fi
+  buf="${key}"
+  if [[ "${key}" =~ [0-9] ]]; then
+    while IFS= read -r -t 0.4 -n 1 -s key </dev/tty 2>/dev/null; do
+      [[ "${key}" == [qQ] ]] && { quelo_brepair_tty $'\n'; return 1; }
+      [[ "${key}" =~ [0-9] ]] || break
+      buf+="${key}"
+    done
+  fi
+  quelo_brepair_tty $'\n'
+  DISK_CHOICE="${buf}"
+  return 0
+}
+
+quelo_brepair_confirm_yn() {
+  local prompt="$1" reply
+
+  quelo_brepair_tty "${C_AMBER}${prompt}${C_RESET}"
+  if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  quelo_brepair_tty $'\n'
+  [[ "${reply}" == [qQ] ]] && return 1
+  if quelo_brepair_ui_is_en; then
+    [[ "${reply}" == [yY] ]]
+  else
+    [[ "${reply}" == [sS] ]]
+  fi
+}
+
+quelo_brepair_confirm_danger() {
+  local target="$1"
+
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "${C_RED}  $(printf "$(quelo_brepair_t danger_warn)" "${target}")${C_RESET}"
+  quelo_brepair_ttyln ""
+  quelo_brepair_confirm_yn "$(quelo_brepair_t danger_confirm1)" || return 1
+  quelo_brepair_confirm_yn "$(quelo_brepair_t danger_confirm2)" || return 1
+  return 0
+}
+
+quelo_brepair_collect_disks() {
+  DISK_DEVS=()
+  DISK_SIZES=()
+  DISK_MODELS=()
+  DISK_VENDORS=()
+  DISK_TRANS=()
+
+  local live_dev dev dtype size model vendor tran
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r dev; do
+    [[ -n "${dev}" ]] || continue
+    [[ "${dev}" == /dev/fd* || "${dev}" == /dev/sr* || "${dev}" == /dev/loop* || "${dev}" == /dev/ram* ]] && continue
+    [[ -n "${live_dev}" && "${dev}" == "${live_dev}" ]] && continue
+    dtype="$(lsblk -d -n -o TYPE "${dev}" 2>/dev/null)"
+    [[ "${dtype}" == "disk" ]] || continue
+    size="$(lsblk -d -n -o SIZE "${dev}" 2>/dev/null)"
+    model="$(lsblk -d -n -o MODEL "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    vendor="$(lsblk -d -n -o VENDOR "${dev}" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    tran="$(lsblk -d -n -o TRAN "${dev}" 2>/dev/null | head -1)"
+    DISK_DEVS+=("${dev}")
+    DISK_SIZES+=("${size}")
+    if [[ -n "${vendor}" && "${vendor}" != "${model}" ]]; then
+      DISK_MODELS+=("${vendor} ${model}")
+    else
+      DISK_MODELS+=("${model:-$(quelo_brepair_t unknown)}")
+    fi
+    DISK_VENDORS+=("${vendor:-}")
+    DISK_TRANS+=("${tran:-?}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_brepair_part_role() {
+  local part="$1" fstype pt flags
+
+  fstype="$(quelo_fs_normalize_type "$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)")"
+  pt="$(lsblk -no PARTTYPE "${part}" 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+  flags="$(lsblk -no PARTFLAGS "${part}" 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+
+  if [[ "${pt}" == *"c12a7328"* ]] || [[ "${fstype}" == "vfat" && "${flags}" == *"esp"* ]]; then
+    echo "efi"
+    return
+  fi
+  case "${fstype}" in
+    ext2|ext3|ext4|btrfs|xfs) echo "linux" ;;
+    ntfs) echo "windows" ;;
+    swap) echo "swap" ;;
+    *) echo "other" ;;
+  esac
+}
+
+quelo_brepair_role_label() {
+  case "$1" in
+    efi)     echo "$(quelo_brepair_t role_efi)" ;;
+    linux)   echo "$(quelo_brepair_t role_linux)" ;;
+    windows) echo "$(quelo_brepair_t role_windows)" ;;
+    boot)    echo "$(quelo_brepair_t role_boot)" ;;
+    swap)    echo "$(quelo_brepair_t role_swap)" ;;
+    *)       echo "$(quelo_brepair_t role_other)" ;;
+  esac
+}
+
+quelo_brepair_analyze_disk() {
+  local disk="$1" part scheme line
+
+  DISK_SCHEME="$(quelo_brepair_t unknown)"
+  DISK_HAS_EFI=0
+  DISK_BIOS_MODE=0
+  DISK_TABLE_BAD=0
+  PART_DEVS=()
+  PART_SIZES=()
+  PART_FSTYPES=()
+  PART_ROLES=()
+
+  scheme="$(lsblk -d -no PTTYPE "${disk}" 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+  case "${scheme}" in
+    gpt) DISK_SCHEME="$(quelo_brepair_t scheme_gpt)" ;;
+    dos|msdos) DISK_SCHEME="$(quelo_brepair_t scheme_mbr)"; DISK_BIOS_MODE=1 ;;
+    *) ;;
+  esac
+
+  if command -v parted >/dev/null 2>&1; then
+    line="$(parted -s "${disk}" print 2>/dev/null | awk -F': ' '/^Partition Table:/ {print $2; exit}')"
+    case "${line,,}" in
+      gpt) DISK_SCHEME="$(quelo_brepair_t scheme_gpt)" ;;
+      msdos) DISK_SCHEME="$(quelo_brepair_t scheme_mbr)"; DISK_BIOS_MODE=1 ;;
+    esac
+    if ! parted -s "${disk}" print >/dev/null 2>&1; then
+      DISK_TABLE_BAD=1
+    fi
+  fi
+
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    quelo_live_is_medium_partition "${part}" && continue
+    role="$(quelo_brepair_part_role "${part}")"
+    PART_DEVS+=("${part}")
+    PART_SIZES+=("$(lsblk -no SIZE "${part}" 2>/dev/null | head -1)")
+    PART_FSTYPES+=("$(quelo_fs_normalize_type "$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)")")
+    PART_ROLES+=("${role}")
+    [[ "${role}" == "efi" ]] && DISK_HAS_EFI=1
+  done < <(quelo_disk_enum_partitions "${disk}")
+
+  ((${#PART_DEVS[@]} == 0)) && DISK_TABLE_BAD=1
+  [[ "${DISK_SCHEME}" == "$(quelo_brepair_t scheme_mbr)" ]] && DISK_BIOS_MODE=1
+}
+
+quelo_brepair_umount_disk() {
+  local disk="$1" part mp
+
+  while IFS= read -r part; do
+    [[ -n "${part}" ]] || continue
+    /usr/local/bin/quelo-automount remove "${part##*/}" 2>/dev/null || true
+    mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+    [[ -z "${mp}" ]] && continue
+    umount "${mp}" 2>/dev/null || umount -l "${mp}" 2>/dev/null || true
+  done < <(quelo_disk_enum_partitions "${disk}")
+}
+
+quelo_brepair_umount_repair() {
+  if mountpoint -q "${REPAIR_MP}" 2>/dev/null; then
+    umount -R "${REPAIR_MP}" 2>/dev/null || umount -l "${REPAIR_MP}" 2>/dev/null || true
+  fi
+}
+
+quelo_brepair_mount_root() {
+  local root="$1" efi="${2:-}"
+
+  quelo_brepair_umount_repair
+  mkdir -p "${REPAIR_MP}"
+  mount "${root}" "${REPAIR_MP}" || return 1
+
+  if [[ -n "${efi}" && -b "${efi}" ]]; then
+    if [[ -d "${REPAIR_MP}/boot/efi" ]]; then
+      mount "${efi}" "${REPAIR_MP}/boot/efi" 2>/dev/null || true
+    fi
+    if ! mountpoint -q "${REPAIR_MP}/boot/efi" 2>/dev/null; then
+      mkdir -p "${REPAIR_MP}/boot/efi"
+      mount "${efi}" "${REPAIR_MP}/boot/efi" 2>/dev/null \
+        || { mkdir -p "${REPAIR_MP}/efi"; mount "${efi}" "${REPAIR_MP}/efi" 2>/dev/null; } \
+        || return 1
+    fi
+  fi
+
+  mount --bind /dev "${REPAIR_MP}/dev"
+  mount --bind /proc "${REPAIR_MP}/proc"
+  mount --bind /sys "${REPAIR_MP}/sys"
+  mount --bind /run "${REPAIR_MP}/run" 2>/dev/null || true
+  if [[ -d /sys/firmware/efi/efivars ]]; then
+    mkdir -p "${REPAIR_MP}/sys/firmware/efi/efivars"
+    mount -t efivarfs efivarfs "${REPAIR_MP}/sys/firmware/efi/efivars" 2>/dev/null || true
+  fi
+  return 0
+}
+
+quelo_brepair_pick_from_role() {
+  local role="$1" title="$2"
+  local i num choice idx
+
+  while true; do
+    quelo_brepair_ui_reset
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln "${C_GREEN_BOLD}      $(quelo_brepair_t title)${C_RESET}"
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  ${title}${C_RESET}"
+    quelo_brepair_ttyln ""
+
+    local found=0 n=0
+    for i in "${!PART_DEVS[@]}"; do
+      [[ "${PART_ROLES[$i]}" == "${role}" ]] || continue
+      ((found++))
+      ((n++))
+      quelo_brepair_ttyln "  ${C_GREEN}${n})${C_RESET} ${PART_DEVS[$i]}  ${PART_SIZES[$i]}  ${PART_FSTYPES[$i]}"
+    done
+
+    if ((found == 0)); then
+      return 1
+    fi
+    if ((found == 1)); then
+      for i in "${!PART_DEVS[@]}"; do
+        [[ "${PART_ROLES[$i]}" == "${role}" ]] && { printf '%s\n' "${PART_DEVS[$i]}"; return 0; }
+      done
+    fi
+
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t select_help)${C_RESET}"
+    quelo_brepair_tty "${C_AMBER}  $(quelo_brepair_t prompt)${C_RESET}"
+    quelo_brepair_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    n=0
+    for i in "${!PART_DEVS[@]}"; do
+      [[ "${PART_ROLES[$i]}" == "${role}" ]] || continue
+      if ((n == idx)); then
+        printf '%s\n' "${PART_DEVS[$i]}"
+        return 0
+      fi
+      ((n++))
+    done
+    quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"
+    sleep 1
+  done
+}
+
+quelo_brepair_show_table_bad() {
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "${C_RED}  ╔══════════════════════════════════════════════════════╗${C_RESET}"
+  quelo_brepair_ttyln "${C_RED}  ║  $(quelo_brepair_t table_bad)${C_RESET}"
+  quelo_brepair_ttyln "${C_RED}  ╚══════════════════════════════════════════════════════╝${C_RESET}"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t table_bad_help)"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "${C_AMBER_BOLD}  $(quelo_brepair_t table_bad_hdr)${C_RESET}"
+  quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t table_bad_4)${C_RESET}"
+  quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t table_bad_2)${C_RESET}"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t table_bad_q)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t table_bad_note)"
+  quelo_brepair_ttyln ""
+}
+
+quelo_brepair_show_detection() {
+  local disk="$1" i bootmode
+
+  if ((DISK_HAS_EFI)); then
+    bootmode="$(quelo_brepair_t boot_uefi)"
+  else
+    bootmode="$(quelo_brepair_t boot_bios)"
+  fi
+
+  quelo_brepair_ttyln "  ${disk}  ${DISK_SCHEME}  ${bootmode}"
+  quelo_brepair_ttyln "  ─────────────────────────────────────"
+  for i in "${!PART_DEVS[@]}"; do
+    quelo_brepair_ttyln "  ${PART_DEVS[$i]}  ${PART_SIZES[$i]}  ${PART_FSTYPES[$i]}  [$(quelo_brepair_role_label "${PART_ROLES[$i]}")]"
+  done
+  quelo_brepair_ttyln "  ─────────────────────────────────────"
+  ((DISK_TABLE_BAD)) && quelo_brepair_show_table_bad
+  quelo_brepair_ttyln "  $(quelo_brepair_t hint_grub)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t hint_windows)"
+  quelo_brepair_ttyln ""
+}
+
+quelo_brepair_show_win_recovery() {
+  quelo_brepair_ui_reset
+  quelo_brepair_ttyln "=================================="
+  quelo_brepair_ttyln "${C_RED}  $(quelo_brepair_t win_recovery_title)${C_RESET}"
+  quelo_brepair_ttyln "=================================="
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_intro)"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_use)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_path)"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_cmds)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_cmd1)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_cmd2)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_cmd3)"
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_cmd4)"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t win_recovery_alt)"
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"
+  quelo_brepair_pause
+}
+
+quelo_brepair_run_update_grub() {
+  local disk="$1" root efi rc=0
+
+  root="$(quelo_brepair_pick_from_role linux "$(quelo_brepair_t step_linux_root)")" || {
+    quelo_brepair_ttyln "  $(quelo_brepair_t no_linux)"
+    sleep 2
+    return 1
+  }
+
+  efi=""
+  if ((DISK_HAS_EFI)); then
+    efi="$(quelo_brepair_pick_from_role efi "$(quelo_brepair_t step_efi)" 2>/dev/null)" || efi=""
+  fi
+
+  if ! quelo_brepair_confirm_danger "${disk} (update-grub)"; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  quelo_brepair_umount_disk "${disk}"
+  quelo_brepair_mount_root "${root}" "${efi}" || return 1
+
+  quelo_brepair_ttyln "  $(quelo_brepair_t running)"
+  if chroot "${REPAIR_MP}" command -v update-grub >/dev/null 2>&1; then
+    chroot "${REPAIR_MP}" update-grub 2>/dev/null || rc=1
+  elif command -v grub-mkconfig >/dev/null 2>&1; then
+    grub-mkconfig -o "${REPAIR_MP}/boot/grub/grub.cfg" 2>/dev/null || rc=1
+  else
+    rc=1
+  fi
+
+  quelo_brepair_umount_repair
+  if ((rc == 0)); then
+    quelo_brepair_ttyln "  $(quelo_brepair_t menu_done)"
+  else
+    printf '  %s\n' "$(printf "$(quelo_brepair_t fail)" "${rc}")"
+  fi
+  return "${rc}"
+}
+
+quelo_brepair_run_grub_install() {
+  local disk="$1" root efi rc=0
+
+  root="$(quelo_brepair_pick_from_role linux "$(quelo_brepair_t step_linux_root)")" || {
+    quelo_brepair_ttyln "  $(quelo_brepair_t no_linux)"
+    sleep 2
+    return 1
+  }
+
+  efi=""
+  if ((DISK_HAS_EFI)); then
+    efi="$(quelo_brepair_pick_from_role efi "$(quelo_brepair_t step_efi)" 2>/dev/null)" || {
+      quelo_brepair_ttyln "  $(quelo_brepair_t no_efi)"
+      sleep 2
+      return 1
+    }
+  fi
+
+  if ! quelo_brepair_confirm_danger "${disk} (GRUB)"; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  quelo_brepair_umount_disk "${disk}"
+  quelo_brepair_mount_root "${root}" "${efi}" || return 1
+
+  quelo_brepair_ttyln "  $(quelo_brepair_t running)"
+  local efi_dir="${REPAIR_MP}/boot/efi"
+  mountpoint -q "${efi_dir}" 2>/dev/null || efi_dir="${REPAIR_MP}/efi"
+  if ((DISK_HAS_EFI)) && command -v grub-install >/dev/null 2>&1; then
+    grub-install --target=x86_64-efi \
+      --efi-directory="${efi_dir}" \
+      --boot-directory="${REPAIR_MP}/boot" \
+      --root-directory="${REPAIR_MP}" \
+      --bootloader-id=GRUB \
+      --recheck \
+      "${disk}" 2>/dev/null || rc=1
+  elif command -v grub-install >/dev/null 2>&1; then
+    grub-install --target=i386-pc \
+      --root-directory="${REPAIR_MP}" \
+      --boot-directory="${REPAIR_MP}/boot" \
+      "${disk}" 2>/dev/null || rc=1
+  else
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    if chroot "${REPAIR_MP}" command -v update-grub >/dev/null 2>&1; then
+      chroot "${REPAIR_MP}" update-grub 2>/dev/null || true
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+      grub-mkconfig -o "${REPAIR_MP}/boot/grub/grub.cfg" 2>/dev/null || true
+    fi
+  fi
+
+  quelo_brepair_umount_repair
+  if ((rc == 0)); then
+    quelo_brepair_ttyln "  $(quelo_brepair_t grub_done)"
+  else
+    printf '  %s\n' "$(printf "$(quelo_brepair_t fail)" "${rc}")"
+  fi
+  return "${rc}"
+}
+
+quelo_brepair_run_mbr_grub() {
+  local disk="$1" rc=0
+
+  if ! ((DISK_BIOS_MODE)) && ! [[ "${DISK_SCHEME}" == *"MBR"* ]]; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t not_bios)"
+    sleep 2
+    return 1
+  fi
+
+  if ! quelo_brepair_confirm_danger "${disk} (MBR GRUB)"; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  quelo_brepair_umount_disk "${disk}"
+  quelo_brepair_ttyln "  $(quelo_brepair_t running)"
+  if command -v grub-install >/dev/null 2>&1; then
+    grub-install --target=i386-pc --force-extra-removable "${disk}" 2>/dev/null || rc=1
+  else
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    quelo_brepair_ttyln "  $(quelo_brepair_t ok)"
+  else
+    printf '  %s\n' "$(printf "$(quelo_brepair_t fail)" "${rc}")"
+  fi
+  return "${rc}"
+}
+
+quelo_brepair_run_mbr_windows() {
+  local disk="$1" rc=0
+
+  if ! ((DISK_BIOS_MODE)) && ! [[ "${DISK_SCHEME}" == *"MBR"* ]]; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t not_bios)"
+    sleep 2
+    return 1
+  fi
+
+  if ! quelo_brepair_confirm_danger "${disk} (MBR Windows)"; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  quelo_brepair_umount_disk "${disk}"
+  quelo_brepair_ttyln "  $(quelo_brepair_t running)"
+  if command -v ms-sys >/dev/null 2>&1; then
+    ms-sys -m "${disk}" 2>/dev/null || rc=1
+  else
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    quelo_brepair_ttyln "  $(quelo_brepair_t ok)"
+  else
+    printf '  %s\n' "$(printf "$(quelo_brepair_t fail)" "${rc}")"
+  fi
+  return "${rc}"
+}
+
+quelo_brepair_run_mbr_menu() {
+  local disk="$1" choice
+
+  while true; do
+    quelo_brepair_ui_reset
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln "${C_GREEN_BOLD}      $(quelo_brepair_t title)${C_RESET}"
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t step_mbr) — ${disk}${C_RESET}"
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_brepair_t mbr_grub)"
+    quelo_brepair_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_brepair_t mbr_win)"
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t select_help)${C_RESET}"
+    quelo_brepair_tty "${C_AMBER}  $(quelo_brepair_t prompt)${C_RESET}"
+    quelo_brepair_read_choice || return 0
+    choice="${DISK_CHOICE}"
+    case "${choice}" in
+      1) quelo_brepair_run_mbr_grub "${disk}"; quelo_brepair_ttyln ""; quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"; quelo_brepair_pause ;;
+      2) quelo_brepair_run_mbr_windows "${disk}"; quelo_brepair_ttyln ""; quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"; quelo_brepair_pause ;;
+      *) quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+quelo_brepair_run_windows() {
+  local disk="$1" i part efi win rc=0 done_efi=0 done_ntfs=0
+
+  efi=""
+  win=""
+  for i in "${!PART_DEVS[@]}"; do
+    [[ "${PART_ROLES[$i]}" == "efi" ]] && efi="${PART_DEVS[$i]}"
+    [[ "${PART_ROLES[$i]}" == "windows" ]] && win="${PART_DEVS[$i]}"
+  done
+
+  if [[ -z "${efi}" && -z "${win}" ]]; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t no_windows)"
+    sleep 2
+    return 1
+  fi
+
+  if ! quelo_brepair_confirm_danger "${disk} (Windows boot)"; then
+    quelo_brepair_ttyln "  $(quelo_brepair_t cancel)"
+    sleep 1
+    return 0
+  fi
+
+  quelo_brepair_umount_disk "${disk}"
+  quelo_brepair_ttyln "  $(quelo_brepair_t running)"
+
+  if [[ -n "${efi}" ]] && command -v efibootmgr >/dev/null 2>&1; then
+    local efi_mp="/mnt/quelo-efi" part_num
+    part_num="$(lsblk -no PARTN "${efi}" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    [[ "${part_num}" =~ ^[0-9]+$ ]] || part_num=1
+    mkdir -p "${efi_mp}"
+    if mount "${efi}" "${efi_mp}" 2>/dev/null; then
+      if [[ -f "${efi_mp}/EFI/Microsoft/Boot/bootmgfw.efi" ]]; then
+        efibootmgr -c -d "${disk}" -p "${part_num}" \
+          -L "Windows Boot Manager" -l '\\EFI\\Microsoft\\Boot\\bootmgfw.efi' 2>/dev/null && done_efi=1 || rc=1
+      else
+        rc=1
+      fi
+      umount "${efi_mp}" 2>/dev/null || true
+    fi
+  fi
+
+  if [[ -n "${win}" ]]; then
+    command -v ntfsfix >/dev/null 2>&1 && ntfsfix -d "${win}" 2>/dev/null || true
+    if command -v ms-sys >/dev/null 2>&1; then
+      ms-sys -7 "${win}" 2>/dev/null && done_ntfs=1 || true
+      if ((DISK_BIOS_MODE)); then
+        ms-sys -m "${disk}" 2>/dev/null || true
+      fi
+    fi
+  fi
+
+  quelo_brepair_ttyln ""
+  if ((done_efi || done_ntfs)); then
+    quelo_brepair_ttyln "  $(quelo_brepair_t win_partial)"
+    quelo_brepair_ttyln "  $(quelo_brepair_t win_try_recovery)"
+  else
+    quelo_brepair_show_win_recovery
+    return 0
+  fi
+
+  quelo_brepair_ttyln ""
+  quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"
+  quelo_brepair_pause
+  return "${rc}"
+}
+
+quelo_brepair_ops_menu() {
+  local disk="$1" choice
+
+  while true; do
+    quelo_brepair_analyze_disk "${disk}"
+    quelo_brepair_ui_reset
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln "${C_GREEN_BOLD}      $(quelo_brepair_t title)${C_RESET}"
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t step_ops)${C_RESET}"
+    quelo_brepair_ttyln ""
+    quelo_brepair_show_detection "${disk}"
+    quelo_brepair_ttyln "  ${C_GREEN}1)${C_RESET} $(quelo_brepair_t op_grub)"
+    quelo_brepair_ttyln "  ${C_GREEN}2)${C_RESET} $(quelo_brepair_t op_mbr)"
+    quelo_brepair_ttyln "  ${C_GREEN}3)${C_RESET} $(quelo_brepair_t op_windows)"
+    quelo_brepair_ttyln "  ${C_GREEN}4)${C_RESET} $(quelo_brepair_t op_update_grub)"
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t select_help)${C_RESET}"
+    quelo_brepair_tty "${C_AMBER}  $(quelo_brepair_t prompt)${C_RESET}"
+    quelo_brepair_read_choice || return 0
+    choice="${DISK_CHOICE}"
+
+    if ((DISK_TABLE_BAD)) && [[ "${choice}" =~ ^[1234]$ ]]; then
+      quelo_brepair_show_table_bad
+      quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"
+      quelo_brepair_pause
+      continue
+    fi
+
+    case "${choice}" in
+      1)
+        quelo_brepair_run_grub_install "${disk}"
+        quelo_brepair_ttyln ""
+        quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"
+        quelo_brepair_pause
+        ;;
+      2)
+        quelo_brepair_run_mbr_menu "${disk}"
+        ;;
+      3)
+        quelo_brepair_run_windows "${disk}"
+        ;;
+      4)
+        quelo_brepair_run_update_grub "${disk}"
+        quelo_brepair_ttyln ""
+        quelo_brepair_ttyln "  $(quelo_brepair_t press_key)"
+        quelo_brepair_pause
+        ;;
+      *)
+        quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+quelo_brepair_pick_disk() {
+  local i num choice idx
+
+  while true; do
+    quelo_brepair_collect_disks
+    quelo_brepair_ui_reset
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln "${C_GREEN_BOLD}      $(quelo_brepair_t title)${C_RESET}"
+    quelo_brepair_ttyln "=================================="
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t step_disk)${C_RESET}"
+    quelo_brepair_ttyln ""
+
+    if ((${#DISK_DEVS[@]} == 0)); then
+      quelo_brepair_ttyln "  $(quelo_brepair_t no_disks)"
+      quelo_brepair_pause
+      return 1
+    fi
+
+    for i in "${!DISK_DEVS[@]}"; do
+      num=$((i + 1))
+      quelo_brepair_ttyln "  ${C_GREEN}${num})${C_RESET} ${DISK_DEVS[$i]}  ${DISK_SIZES[$i]}  ${DISK_MODELS[$i]}"
+    done
+    quelo_brepair_ttyln ""
+    quelo_brepair_ttyln "${C_AMBER}  $(quelo_brepair_t select_help)${C_RESET}"
+    quelo_brepair_tty "${C_AMBER}  $(quelo_brepair_t prompt)${C_RESET}"
+    quelo_brepair_read_choice || return 1
+    choice="${DISK_CHOICE}"
+    [[ "${choice}" =~ ^[0-9]+$ ]] || { quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"; sleep 1; continue; }
+    idx=$((choice - 1))
+    ((idx >= 0 && idx < ${#DISK_DEVS[@]})) || { quelo_brepair_ttyln "  $(quelo_brepair_t invalid)"; sleep 1; continue; }
+    printf '%s\n' "${DISK_DEVS[$idx]}"
+    return 0
+  done
+}
+
+quelo_brepair_menu() {
+  local disk
+
+  /usr/local/bin/quelo-setup-display 2>/dev/null || true
+  quelo_brepair_ui_reset
+
+  while true; do
+    disk="$(quelo_brepair_pick_disk)" || return 0
+    quelo_brepair_ops_menu "${disk}"
+  done
+}
+
+quelo_brepair_menu

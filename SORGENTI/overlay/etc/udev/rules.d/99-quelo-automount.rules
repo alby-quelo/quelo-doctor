@@ -1,0 +1,6 @@
+# Automount partizioni dati in /media (esclude live ISO via script).
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="*[0-9]", ENV{DEVTYPE}=="partition", \
+  RUN+="/usr/bin/systemd-run --quiet --no-block --collect -p StandardInput=null -p StandardOutput=null -p StandardError=null /usr/local/bin/quelo-automount add %k"
+
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="*[0-9]", ENV{DEVTYPE}=="partition", \
+  RUN+="/usr/bin/systemd-run --quiet --no-block --collect -p StandardInput=null -p StandardOutput=null -p StandardError=null /usr/local/bin/quelo-automount remove %k"

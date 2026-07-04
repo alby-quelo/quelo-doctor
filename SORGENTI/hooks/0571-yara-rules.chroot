@@ -1,0 +1,29 @@
+#!/bin/bash
+# Regole YARA community (subset) per scansione offline.
+set -e
+
+YARA_DIR="/usr/local/share/quelo-scan/yara"
+MAX_RULES=20
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y --no-install-recommends git ca-certificates
+
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+mkdir -p "${YARA_DIR}"
+if git clone --depth 1 https://github.com/Yara-Rules/rules.git "${tmpdir}/rules" 2>/dev/null; then
+  find "${tmpdir}/rules/malware" -type f \( -name '*.yar' -o -name '*.yara' \) 2>/dev/null \
+    | head -n "${MAX_RULES}" \
+    | while IFS= read -r rule; do
+      cp "${rule}" "${YARA_DIR}/"
+    done
+fi
+
+apt-get purge -y git
+apt-get autoremove -y --purge
+apt-get clean
+
+rule_count="$(find "${YARA_DIR}" -type f \( -name '*.yar' -o -name '*.yara' \) 2>/dev/null | wc -l)"
+echo "Regole YARA installate: ${rule_count}"

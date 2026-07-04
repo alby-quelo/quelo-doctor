@@ -1,0 +1,231 @@
+#!/bin/bash
+
+export LC_ALL="${LC_ALL:-it_IT.UTF-8}"
+export LANG="${LANG:-it_IT.UTF-8}"
+export TERM="${TERM:-linux}"
+
+Q_BIN="$(dirname "$(readlink -f "$0")")"
+
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-console-quiet.sh"
+quelo_console_quiet_on
+# shellcheck disable=SC1091
+. "${Q_BIN}/quelo-fs.sh"
+
+C_GREEN_BOLD=$'\033[1;32m'
+C_GREEN=$'\033[32m'
+C_AMBER=$'\033[33m'
+C_RESET=$'\033[0m'
+
+DEST_DEVS=()
+DEST_MOUNTS=()
+DEST_FREE=()
+REPORT_CHOICE=""
+
+quelo_report_tty() {
+  printf '%b' "$*" >/dev/tty 2>/dev/null || printf '%b' "$*"
+}
+
+quelo_report_ttyln() {
+  quelo_report_tty "$*"
+  quelo_report_tty $'\n'
+}
+
+quelo_report_ui_is_en() {
+  [[ -f /etc/default/locale ]] && grep -qE '^LANG=en_' /etc/default/locale
+}
+
+quelo_report_t() {
+  if quelo_report_ui_is_en; then
+    case "$1" in
+      title)      echo "SAVE REPORT / LOG" ;;
+      step_dest)  echo "Select writable destination" ;;
+      no_dest)    echo "No writable destination found." ;;
+      help)       echo "Number=choice | Q=back" ;;
+      prompt)     echo "Choice: " ;;
+      invalid)    echo "Invalid choice." ;;
+      saving)     echo "Saving report..." ;;
+      saved)      echo "Report saved:" ;;
+      failed)     echo "Failed to save report." ;;
+      confirm)    echo "Save here? [y/n]: " ;;
+    esac
+  else
+    case "$1" in
+      title)      echo "SALVA RAPPORTO / LOG" ;;
+      step_dest)  echo "Seleziona destinazione scrivibile" ;;
+      no_dest)    echo "Nessuna destinazione scrivibile trovata." ;;
+      help)       echo "Numero=scelta | Q=indietro" ;;
+      prompt)     echo "Scelta: " ;;
+      invalid)    echo "Scelta non valida." ;;
+      saving)     echo "Salvataggio rapporto..." ;;
+      saved)      echo "Rapporto salvato:" ;;
+      failed)     echo "Salvataggio rapporto fallito." ;;
+      confirm)    echo "Salvare qui? [s/n]: " ;;
+    esac
+  fi
+}
+
+quelo_report_ui_reset() {
+  /usr/local/bin/quelo-clear-fb 2>/dev/null || true
+  clear >/dev/tty 2>/dev/null || clear
+}
+
+quelo_report_read_choice() {
+  local key buf
+
+  REPORT_CHOICE=""
+  if ! IFS= read -r -n 1 -s key </dev/tty 2>/dev/null; then
+    return 1
+  fi
+  [[ "${key}" == [qQ] ]] && { printf '\n' >/dev/tty 2>/dev/null; return 1; }
+  buf="${key}"
+  if [[ "${key}" =~ ^[0-9]$ ]]; then
+    while IFS= read -r -n 1 -t 0.4 -s key </dev/tty 2>/dev/null; do
+      [[ "${key}" =~ ^[0-9]$ ]] || break
+      buf="${buf}${key}"
+    done
+  fi
+  printf '\n' >/dev/tty 2>/dev/null
+  REPORT_CHOICE="${buf}"
+  return 0
+}
+
+quelo_report_collect_writable_dests() {
+  local live_dev disk part fstype mp avail
+
+  DEST_DEVS=()
+  DEST_MOUNTS=()
+  DEST_FREE=()
+
+  live_dev="$(quelo_live_disk 2>/dev/null)" || live_dev=""
+
+  while IFS= read -r disk; do
+    [[ -n "${disk}" ]] || continue
+    while IFS= read -r part; do
+      [[ -n "${part}" ]] || continue
+      quelo_live_is_medium_partition "${part}" && continue
+      [[ -n "${live_dev}" && "$(quelo_partition_disk "${part}")" == "${live_dev}" ]] && continue
+      fstype="$(quelo_fs_normalize_type "$(lsblk -no FSTYPE "${part}" 2>/dev/null | head -1)")"
+      [[ -z "${fstype}" || "${fstype}" == "swap" ]] && continue
+      mp="$(findmnt -n -o TARGET --source "${part}" 2>/dev/null)" || mp=""
+      if [[ -z "${mp}" ]]; then
+        mp="$(/usr/local/bin/quelo-automount mount "${part##*/}" 2>/dev/null)" || mp=""
+      fi
+      [[ -n "${mp}" && -d "${mp}" && -w "${mp}" ]] || continue
+      avail="$(df -B1 --output=avail "${mp}" 2>/dev/null | tail -1 | tr -d '[:space:]')"
+      DEST_DEVS+=("${part}")
+      DEST_MOUNTS+=("${mp}")
+      DEST_FREE+=("${avail:-0}")
+    done < <(quelo_disk_enum_partitions "${disk}")
+  done < <(lsblk -d -n -p -o NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}')
+}
+
+quelo_report_default_name() {
+  local ver datestamp
+  ver="$(tr -d '[:space:]' </etc/quelo-doctor-version 2>/dev/null || echo "unknown")"
+  datestamp="$(date +%Y%m%d-%H%M%S)"
+  printf 'quelo-doctor-rapporto-%s-%s.txt' "${ver}" "${datestamp}"
+}
+
+quelo_report_write() {
+  local dest="$1" outfile="$2" tmp f
+
+  tmp="$(mktemp /tmp/quelo-report-XXXXXX)"
+  {
+    echo "QUELO DOCTOR — SESSION REPORT"
+    echo "Generated: $(date -Iseconds 2>/dev/null || date)"
+    echo "Version: $(tr -d '[:space:]' </etc/quelo-doctor-version 2>/dev/null || echo unknown)"
+    echo "Locale: ${LANG:-?}"
+    echo "Kernel: $(uname -r)"
+    echo ""
+    echo "=== BLOCK DEVICES (lsblk) ==="
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINTS 2>/dev/null || lsblk
+    echo ""
+    echo "=== MEMORY ==="
+    free -h 2>/dev/null || true
+    echo ""
+    echo "=== NETWORK ==="
+    ip -br addr 2>/dev/null || true
+    echo ""
+    echo "=== QUELO LOG FILES (/tmp/quelo-*.log) ==="
+    shopt -s nullglob
+    local logs=(/tmp/quelo-*.log)
+    if ((${#logs[@]} == 0)); then
+      echo "(none)"
+    else
+      for f in "${logs[@]}"; do
+        echo ""
+        echo "--- ${f} ---"
+        cat "${f}" 2>/dev/null
+      done
+    fi
+    shopt -u nullglob
+  } >"${tmp}"
+
+  if cp "${tmp}" "${dest}/${outfile}" 2>/dev/null; then
+    quelo_fs_publish_export "${dest}/${outfile}"
+    rm -f "${tmp}"
+    return 0
+  fi
+  rm -f "${tmp}"
+  return 1
+}
+
+quelo_report_pick_dest() {
+  local i num idx outfile dest reply
+
+  quelo_report_collect_writable_dests
+  if ((${#DEST_MOUNTS[@]} == 0)); then
+    quelo_report_ttyln "  $(quelo_report_t no_dest)"
+    sleep 2
+    return 1
+  fi
+
+  while true; do
+    quelo_report_ui_reset
+    quelo_report_ttyln "=================================="
+    quelo_report_ttyln "${C_GREEN_BOLD}      $(quelo_report_t title)${C_RESET}"
+    quelo_report_ttyln "=================================="
+    quelo_report_ttyln ""
+    quelo_report_ttyln "${C_AMBER}  $(quelo_report_t step_dest)${C_RESET}"
+    for i in "${!DEST_MOUNTS[@]}"; do
+      num=$((i + 1))
+      quelo_report_ttyln "  ${C_GREEN}${num})${C_RESET} ${DEST_DEVS[$i]}  ${DEST_MOUNTS[$i]}"
+    done
+    quelo_report_ttyln ""
+    quelo_report_ttyln "${C_AMBER}  $(quelo_report_t help)${C_RESET}"
+    quelo_report_tty "${C_AMBER}  $(quelo_report_t prompt)${C_RESET}"
+    quelo_report_read_choice || return 1
+    [[ "${REPORT_CHOICE}" =~ ^[0-9]+$ ]] || { quelo_report_ttyln "  $(quelo_report_t invalid)"; sleep 1; continue; }
+    idx=$((REPORT_CHOICE - 1))
+    ((idx >= 0 && idx < ${#DEST_MOUNTS[@]})) || { quelo_report_ttyln "  $(quelo_report_t invalid)"; sleep 1; continue; }
+
+    dest="${DEST_MOUNTS[$idx]}"
+    outfile="$(quelo_report_default_name)"
+    quelo_report_ttyln ""
+    quelo_report_ttyln "  ${dest}/${outfile}"
+    quelo_report_tty "${C_AMBER}  $(quelo_report_t confirm)${C_RESET}"
+    if ! IFS= read -r -n 1 -s reply </dev/tty 2>/dev/null; then
+      return 1
+    fi
+    printf '\n' >/dev/tty 2>/dev/null
+    case "${reply}" in
+      s|S|y|Y)
+        quelo_report_ttyln "  $(quelo_report_t saving)"
+        if quelo_report_write "${dest}" "${outfile}"; then
+          quelo_report_ttyln "  $(quelo_report_t saved)"
+          quelo_report_ttyln "  ${dest}/${outfile}"
+          sleep 3
+          return 0
+        fi
+        quelo_report_ttyln "  $(quelo_report_t failed)"
+        sleep 2
+        ;;
+      n|N) continue ;;
+      *) quelo_report_ttyln "  $(quelo_report_t invalid)"; sleep 1 ;;
+    esac
+  done
+}
+
+/usr/local/bin/quelo-setup-display 2>/dev/null || true
+quelo_report_pick_dest

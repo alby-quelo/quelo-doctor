@@ -1,0 +1,3 @@
+2 — DISK CHECK
+Pick disk → SMART, partitions, fsck. Key D = disk table ops.
+Destructive actions need double confirm. Live USB excluded.
