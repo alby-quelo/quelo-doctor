@@ -23,7 +23,8 @@
   <a href="#italiano">Italiano</a> ·
   <a href="#english">English</a> ·
   <a href="#build">Build</a> ·
-  <a href="#segnalare-problemi">Segnalazioni</a>
+  <a href="#segnalare-problemi">Segnalazioni</a> ·
+  <a href="#avvertenza">Avvertenza</a>
 </p>
 
 ---
@@ -215,6 +216,15 @@ Hai trovato un bug? Apri una **[Issue](https://github.com/alby-quelo/quelo-docto
 - comportamento atteso vs osservato  
 
 Found a bug? Open an **[Issue](https://github.com/alby-quelo/quelo-doctor/issues/new/choose)** with the same details.
+
+---
+
+<a id="avvertenza"></a>
+## Avvertenza / Disclaimer
+
+> **Avvertenza.** Quelo Doctor è distribuito «così com'è», senza garanzie di alcun tipo, espresse o implicite. È realizzato a **scopo didattico e sperimentale**: non sostituisce l'assistenza professionale né garantisce il recupero dei dati o l'esito delle operazioni su dischi, sistemi o reti. L'uso è a proprio rischio; gli autori non rispondono di danni diretti o indiretti derivanti dall'uso dell'ISO o delle istruzioni pubblicate.
+
+> **Disclaimer.** Quelo Doctor is provided «as is», without warranty of any kind, express or implied. It is intended for **educational and experimental purposes** only: it does not replace professional support and does not guarantee data recovery or the outcome of any disk, system, or network operation. Use at your own risk; the authors are not liable for any direct or indirect damage arising from the use of the ISO or the published instructions.
 
 ---
 

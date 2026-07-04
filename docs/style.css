@@ -282,6 +282,31 @@ footer {
   font-size: 0.9rem;
 }
 
+.disclaimer {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--amber);
+  background: var(--bg-card);
+  color: var(--muted);
+  text-align: left;
+  max-width: 52rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.disclaimer p {
+  margin: 0 0 0.75rem;
+}
+
+.disclaimer p:last-child {
+  margin-bottom: 0;
+}
+
+.disclaimer.compact {
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
 @media (max-width: 600px) {
   h1 { font-size: 1.85rem; }
   main { padding: 1.5rem 1rem 3rem; }
